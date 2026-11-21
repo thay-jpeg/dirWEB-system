@@ -1,0 +1,79 @@
+# ==========================================
+# Java & Maven (Multi-módulo)
+# ==========================================
+**/target/
+*.class
+*.log
+*.ctxt
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+hs_err_pid*
+replay_pid*
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+database.properties
+release.properties
+dependency-reduced-pom.xml
+
+# ==========================================
+# IntelliJ IDEA
+# ==========================================
+.idea/
+**/.idea/
+*.iml
+*.ipr
+*.iws
+out/
+**/out/
+
+# ==========================================
+# VS Code & Extensão Java / Eclipse
+# ==========================================
+.vscode/
+**/.vscode/
+.classpath
+**/.classpath
+.project
+**/.project
+.settings/
+**/.settings/
+.factorypath
+**/.factorypath
+.nb-gradle/
+nbactions.xml
+nb-configuration.xml
+
+# ==========================================
+# Front-end (React / Vite / Node)
+# ==========================================
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+build/
+.env
+.env.local
+.env.*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ==========================================
+# Banco de Dados / Credenciais Locais
+# ==========================================
+# Descomente a linha abaixo se vocês usarem senhas diferentes no MySQL
+# **/database.properties
+
+# ==========================================
+# Sistema Operacional
+# ==========================================
+.DS_Store
+Thumbs.db
+Desktop.ini
