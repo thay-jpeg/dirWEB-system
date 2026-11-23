@@ -23,6 +23,31 @@ public class PessoaJuridicaDAO {
         }
     }
 
+    public PessoaJuridica buscarPorCnpj(String cnpj) throws SQLException {
+        String sql = """
+            SELECT p.idPessoa, p.Nome, pj.CNPJ
+            FROM Pessoa_Juridica pj
+            JOIN Pessoa p ON p.idPessoa = pj.Pessoa_idPessoa
+            WHERE pj.CNPJ = ?
+            """;
+
+        try (PreparedStatement stmt = conexao.prepareStatement(sql)) {
+            stmt.setString(1, cnpj);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (!rs.next()) {
+                    return null;
+                }
+
+                PessoaJuridica empresa = new PessoaJuridica();
+                empresa.setIdPessoa(rs.getInt("idPessoa"));
+                empresa.setNome(rs.getString("Nome"));
+                empresa.setCnpj(rs.getString("CNPJ"));
+                return empresa;
+            }
+        }
+    }
+
     public Integer buscarIdPorCnpj(String cnpjLimpo) throws SQLException {
         String sql = "SELECT Pessoa_idPessoa FROM Pessoa_Juridica WHERE CNPJ = ?";
         try (PreparedStatement stmt = conexao.prepareStatement(sql)) {

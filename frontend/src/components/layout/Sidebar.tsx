@@ -1,8 +1,7 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { CircleDollarSign, FileCheck2, House, Landmark, LogOut, User, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { useAuthStore } from '@/store/useAuthStore'
-import { useDeclaracaoStore } from '@/store/useDeclaracaoStore'
+import { useSair } from '@/hooks'
 
 const itens: { to: string; label: string; Icon: LucideIcon }[] = [
   { to: '/home', label: 'Início', Icon: House },
@@ -16,12 +15,7 @@ const itens: { to: string; label: string; Icon: LucideIcon }[] = [
 const row = 'flex items-center gap-4 rounded-lg px-5 py-3.5 text-[0.9375rem] transition-colors'
 
 export default function Sidebar() {
-  const navigate = useNavigate()
-  const sair = () => {
-    useAuthStore.getState().logout() // limpa sessão/token
-    useDeclaracaoStore.getState().reset()
-    navigate('/login', { replace: true })
-  }
+  const sair = useSair()
   return (
     <aside className="flex w-60 shrink-0 flex-col rounded-xl bg-brand-soft p-2 lg:w-64">
       <nav className="flex flex-col gap-1">

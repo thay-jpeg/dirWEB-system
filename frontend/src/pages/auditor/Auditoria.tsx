@@ -1,17 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { useNavigate, useParams } from 'react-router-dom'
-import { AlertTriangle, ArrowLeft, Check, ShieldAlert } from 'lucide-react'
-import Button from '@/components/ui/Button'
+import { AlertTriangle, ArrowLeft } from 'lucide-react'
 import DataGrid from '@/components/ui/DataGrid'
 import type { Column } from '@/components/ui/DataGrid'
-import Modal from '@/components/ui/Modal'
 import StatusBadge from '@/components/ui/StatusBadge'
 import Tabs from '@/components/ui/Tabs'
 import { auditoriaService } from '@/services/auditoriaService'
-import { useDeclaracaoStore } from '@/store/useDeclaracaoStore'
 import type { Bem, Dependente, DeclaracaoAuditoria, Rendimento } from '@/types'
 import { patrimonioIncompativel, totais } from '@/utils/auditoria'
 import { formatBRL } from '@/utils/masks'
@@ -22,9 +16,6 @@ const abas: { id: Aba; label: string }[] = [
   { id: 'rendimentos', label: 'Rendimentos' },
   { id: 'bens', label: 'Bens e Direitos' },
 ]
-
-const retencaoSchema = z.object({ justificativa: z.string().trim().min(10, 'Descreva a justificativa (mínimo de 10 caracteres)') })
-type RetencaoForm = z.infer<typeof retencaoSchema>
 
 function ResumoCard({ label, value, alerta }: { label: string; value: string; alerta?: boolean }) {
   return (
@@ -55,38 +46,27 @@ function Campo({ label, value }: { label: string; value: string }) {
 export default function Auditoria() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const showToast = useDeclaracaoStore((s) => s.showToast)
   const [decl, setDecl] = useState<DeclaracaoAuditoria | null>(null)
-  const [naoEncontrada, setNaoEncontrada] = useState(false)
+  const [erro, setErro] = useState('')
   const [aba, setAba] = useState<Aba>('dados')
-  const [modal, setModal] = useState(false)
-  const [agindo, setAgindo] = useState(false)
-
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<RetencaoForm>({ resolver: zodResolver(retencaoSchema) })
 
   useEffect(() => {
-    auditoriaService.obterDeclaracao(Number(id)).then(setDecl).catch(() => setNaoEncontrada(true))
+    let ativo = true
+    setDecl(null)
+    setErro('')
+    // Busca os dados completos da declaração selecionada na triagem.
+    auditoriaService.obterDeclaracao(Number(id))
+      .then((dados) => { if (ativo) setDecl(dados) })
+      .catch((error: Error) => { if (ativo) setErro(error.message) })
+    return () => { ativo = false }
   }, [id])
 
-  if (naoEncontrada) return <p className="text-brand">Declaração não encontrada. <button className="underline" onClick={() => navigate('/auditor')}>Voltar</button></p>
-  if (!decl) return <p className="text-brand">Carregando...</p>
+  if (erro) return <p role="alert" className="text-brand">{erro} <button className="underline" onClick={() => navigate('/auditor')}>Voltar</button></p>
+  if (!decl || decl.idDeclaracao !== Number(id)) return <p className="text-brand">Carregando...</p>
 
   const t = totais(decl)
   const alerta = patrimonioIncompativel(t.totalBens, t.totalRendimentos)
   const c = decl.contribuinte
-
-  const aprovar = async () => {
-    try { setAgindo(true); setDecl(await auditoriaService.aprovarDeclaracao(decl.idDeclaracao)); showToast('Declaração aprovada e marcada como Processada.') }
-    catch { showToast('Erro ao aprovar a declaração.', 'error') } finally { setAgindo(false) }
-  }
-  const reter = async ({ justificativa }: RetencaoForm) => {
-    try {
-      setAgindo(true)
-      setDecl(await auditoriaService.reterEmMalhaFina(decl.idDeclaracao, justificativa))
-      showToast('Declaração retida em malha fina.')
-      setModal(false); reset()
-    } catch { showToast('Erro ao reter a declaração.', 'error') } finally { setAgindo(false) }
-  }
 
   const colsDep: Column<Dependente>[] = [
     { header: 'Nome', render: (d) => d.Nome },
@@ -176,42 +156,13 @@ export default function Auditoria() {
             </div>
           )}
 
-          {decl.status === 'Retida' && decl.justificativaRetencao && (
-            <div className="mt-5 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
-              <p className="mb-1 flex items-center gap-2 font-bold"><ShieldAlert className="h-4 w-4" /> Justificativa da retenção</p>
-              {decl.justificativaRetencao}
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Rodapé fixo com as ações do auditor */}
-      <div className="sticky bottom-0 -mx-1 mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-brand/20 bg-white px-1 py-3 shadow-[0_-6px_12px_rgba(26,63,134,.06)]">
-        <button type="button" disabled={agindo || decl.status === 'Retida'} onClick={() => setModal(true)}
-          className="rounded-lg border-2 border-red-600 px-5 py-2 text-sm font-bold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-          Reter em Malha Fina
-        </button>
-        <Button disabled={agindo || decl.status === 'Processada'} onClick={aprovar} icon={<Check className="h-4 w-4" />}
-          className="!bg-emerald-600 px-5 hover:!brightness-110">
-          Aprovar Declaração
-        </Button>
-      </div>
-
-      <Modal open={modal} title="Reter em Malha Fina" onClose={() => { setModal(false); reset() }}>
-        <form onSubmit={handleSubmit(reter)} noValidate className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="justificativa" className="text-sm font-medium text-brand">Justificativa da Retenção</label>
-            <textarea id="justificativa" rows={4} {...register('justificativa')} aria-invalid={!!errors.justificativa}
-              className={`rounded-lg border bg-neutral-100 px-3 py-2 text-sm text-neutral-800 outline-none focus:ring-2 focus:ring-brand/30 ${errors.justificativa ? 'border-red-500' : 'border-brand/50'}`} />
-            {errors.justificativa && <span className="text-xs text-red-600">{errors.justificativa.message}</span>}
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => { setModal(false); reset() }}>Cancelar</Button>
-            <Button type="submit" disabled={agindo} className="!bg-red-600">{agindo ? 'Confirmando...' : 'Confirmar retenção'}</Button>
-          </div>
-        </form>
-      </Modal>
+      {/* Alterações de status dependem de rotas que a API ainda não oferece. */}
+      <p className="mt-6 border-t border-brand/20 pt-3 text-sm text-neutral-600">
+        Aprovar ou reter declarações ainda não está disponível.
+      </p>
     </div>
   )
 }

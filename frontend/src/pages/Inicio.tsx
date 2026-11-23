@@ -19,7 +19,7 @@ export default function Inicio() {
       <img src={banner} alt="" className="h-auto w-full rounded-xl" />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_280px]">
-        <Card title="Meu Imposto de Renda" icon={<ChartNoAxesCombined className="h-5 w-5" />} className="self-start">
+        <Card title={s.declaracaoConsultada && !s.enviada ? 'Progresso do rascunho' : 'Meu Imposto de Renda'} icon={<ChartNoAxesCombined className="h-5 w-5" />} className="self-start">
           <div className="flex flex-wrap items-center gap-8 px-6 py-5">
             <ProgressDonut percent={calcProgresso(s)} />
             <div className="grid flex-1 grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
@@ -44,15 +44,15 @@ export default function Inicio() {
             <CalendarDays strokeWidth={1.5} className="pointer-events-none absolute bottom-2 right-2 h-16 w-16 opacity-20" />
           </section>
 
-          <Button
+          {!s.declaracaoConsultada && <Button
             variant="action"
-            disabled={enviando}
+            disabled={!s.carregado || enviando || s.enviada}
             icon={<Send className="h-5 w-5" fill="currentColor" />}
             className="w-full rounded-xl py-4 text-base"
             onClick={enviar}
           >
-            {enviando ? 'ENVIANDO...' : 'ENVIAR DECLARAÇÃO'}
-          </Button>
+            {s.enviada ? 'DECLARAÇÃO ENVIADA' : enviando ? 'ENVIANDO...' : 'ENVIAR DECLARAÇÃO'}
+          </Button>}
         </div>
       </div>
     </div>

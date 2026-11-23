@@ -5,7 +5,7 @@ import type { Column } from '@/components/ui/DataGrid'
 import PageHeader from '@/components/ui/PageHeader'
 import StatusBadge from '@/components/ui/StatusBadge'
 import { auditoriaService } from '@/services/auditoriaService'
-import { useDeclaracaoStore } from '@/store/useDeclaracaoStore'
+import Button from '@/components/ui/Button'
 import type { DeclaracaoAuditoria, StatusDeclaracao } from '@/types'
 
 type Filtro = 'Todas' | StatusDeclaracao
@@ -18,16 +18,23 @@ const filtros: { id: Filtro; label: string }[] = [
 
 export default function Triagem() {
   const navigate = useNavigate()
-  const showToast = useDeclaracaoStore((s) => s.showToast)
   const [declaracoes, setDeclaracoes] = useState<DeclaracaoAuditoria[]>([])
   const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState('')
+  const [tentativa, setTentativa] = useState(0)
   const [filtro, setFiltro] = useState<Filtro>('Todas')
 
   useEffect(() => {
-    auditoriaService.listarDeclaracoes().then(setDeclaracoes)
-      .catch(() => showToast('Erro ao carregar as declarações.', 'error'))
-      .finally(() => setCarregando(false))
-  }, [showToast])
+    let ativo = true
+    setCarregando(true)
+    setErro('')
+    // A triagem só exibe as declarações liberadas para a sessão do auditor no backend.
+    auditoriaService.listarDeclaracoes()
+      .then((dados) => { if (ativo) setDeclaracoes(dados) })
+      .catch((error: Error) => { if (ativo) setErro(error.message) })
+      .finally(() => { if (ativo) setCarregando(false) })
+    return () => { ativo = false }
+  }, [tentativa])
 
   const visiveis = filtro === 'Todas' ? declaracoes : declaracoes.filter((d) => d.status === filtro)
   const conta = (f: Filtro) => (f === 'Todas' ? declaracoes.length : declaracoes.filter((d) => d.status === f).length)
@@ -42,6 +49,13 @@ export default function Triagem() {
   return (
     <div>
       <PageHeader title="Triagem de Declarações" subtitle="Clique em uma declaração para auditá-la." />
+
+      {erro && (
+        <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 text-sm text-red-700">
+          <p>{erro}</p>
+          <Button onClick={() => setTentativa((n) => n + 1)}>Tentar novamente</Button>
+        </div>
+      )}
 
       <div className="mb-4 flex flex-wrap gap-2">
         {filtros.map((f) => (
@@ -59,7 +73,7 @@ export default function Triagem() {
         rows={visiveis}
         rowKey={(d) => d.idDeclaracao}
         loading={carregando}
-        emptyMessage="Nenhuma declaração encontrada para este filtro."
+        emptyMessage={erro ? 'A triagem está indisponível.' : 'Nenhuma declaração encontrada para este filtro.'}
         onRowClick={(d) => navigate(`/auditor/declaracoes/${d.idDeclaracao}`)}
       />
     </div>

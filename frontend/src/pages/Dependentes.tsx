@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { Plus, Trash2 } from 'lucide-react'
+import { zodResolver } from '@/utils/zodResolver'
+import { Plus } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import DataGrid from '@/components/ui/DataGrid'
 import type { Column } from '@/components/ui/DataGrid'
@@ -10,14 +10,18 @@ import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
 import Select from '@/components/ui/Select'
 import { dependenteSchema } from '@/types'
-import type { Dependente, DependenteSchema } from '@/types'
+import type { Dependente, DependenteSchema, TipoDependente } from '@/types'
 import { declaracaoService } from '@/services/declaracaoService'
 import { useDeclaracaoStore } from '@/store/useDeclaracaoStore'
+import { useAuthStore } from '@/store/useAuthStore'
 import { maskCPF } from '@/utils/masks'
 
 export default function Dependentes() {
-  const { dependentes, tiposDependente, semDependentes, carregado, setDependentes, setSemDependentes, showToast } =
+  const { dependentes, semDependentes, carregado, erroDependentes, setDependentes, setSemDependentes, showToast } =
     useDeclaracaoStore()
+  const usuario = useAuthStore((s) => s.usuario)
+  const [tiposDependente, setTiposDependente] = useState<TipoDependente[]>([])
+  const [carregandoTipos, setCarregandoTipos] = useState(false)
   const [aberto, setAberto] = useState(false)
   const [salvando, setSalvando] = useState(false)
 
@@ -27,41 +31,53 @@ export default function Dependentes() {
 
   const fechar = () => { setAberto(false); reset({ Nome: '', CPF: '' }) }
 
-  const onSubmit = async (data: DependenteSchema) => {
+  // Carrega o catálogo real somente ao abrir o formulário.
+  const abrirFormulario = async () => {
+    if (!usuario) return
+    setCarregandoTipos(true)
     try {
-      setSalvando(true)
-      const tipo = tiposDependente.find((t) => t.idTipo_dependente === data.Tipo_dependente_idTipo_dependente)
-      const novo = await declaracaoService.cadastrarDependente({ ...data, Tipo_dependente: tipo?.Tipo_dependente })
-      setDependentes([...dependentes, novo])
-      setSemDependentes(false)
-      showToast('Dependente adicionado com sucesso!')
-      fechar()
-    } catch {
-      showToast('Erro ao salvar o dependente.', 'error')
+      const tipos = await declaracaoService.listarTiposDependencia()
+      if (useAuthStore.getState().usuario !== usuario) return
+      if (tipos.length === 0) {
+        showToast('Nenhum tipo de dependência cadastrado no banco.', 'error')
+        return
+      }
+      setTiposDependente(tipos)
+      setAberto(true)
+    } catch (error) {
+      if (useAuthStore.getState().usuario === usuario) {
+        showToast(error instanceof Error ? error.message : 'Erro ao carregar os tipos.', 'error')
+      }
     } finally {
-      setSalvando(false)
+      setCarregandoTipos(false)
     }
   }
 
-  const remover = async (id?: number) => {
-    if (id === undefined || !window.confirm('Remover este dependente?')) return
-    await declaracaoService.removerDependente(id)
-    setDependentes(dependentes.filter((d) => d.idDependente !== id))
-    showToast('Dependente removido.')
+  const onSubmit = async (data: DependenteSchema) => {
+    if (!usuario) return
+    try {
+      setSalvando(true)
+      const tipo = tiposDependente.find((t) => t.idTipo_dependente === data.Tipo_dependente_idTipo_dependente)
+      if (!tipo) throw new Error('Selecione um tipo de dependência.')
+      const novo = await declaracaoService.cadastrarDependente(usuario.idPessoa, data, tipo.Tipo_dependente)
+      if (useAuthStore.getState().usuario !== usuario) return
+      setDependentes([...useDeclaracaoStore.getState().dependentes, novo])
+      setSemDependentes(false)
+      showToast('Dependente adicionado com sucesso!')
+      fechar()
+    } catch (error) {
+      if (useAuthStore.getState().usuario === usuario) {
+        showToast(error instanceof Error ? error.message : 'Erro ao salvar o dependente.', 'error')
+      }
+    } finally {
+      setSalvando(false)
+    }
   }
 
   const columns: Column<Dependente>[] = [
     { header: 'Nome', render: (d) => d.Nome },
     { header: 'CPF', render: (d) => d.CPF },
     { header: 'Tipo de Dependência', render: (d) => d.Tipo_dependente },
-    {
-      header: 'Ações', align: 'right',
-      render: (d) => (
-        <button type="button" aria-label="Remover" onClick={() => remover(d.idDependente)} className="rounded p-1.5 text-red-600 hover:bg-red-50">
-          <Trash2 className="h-4 w-4" />
-        </button>
-      ),
-    },
   ]
 
   return (
@@ -69,22 +85,28 @@ export default function Dependentes() {
       <PageHeader
         title="Dependentes"
         subtitle="O contribuinte pode não ter ou ter vários dependentes."
-        action={<Button icon={<Plus className="h-4 w-4" />} onClick={() => setAberto(true)}>Adicionar Dependente</Button>}
+        action={
+          <Button icon={<Plus className="h-4 w-4" />} disabled={!carregado || erroDependentes || carregandoTipos} onClick={abrirFormulario}>
+            {carregandoTipos ? 'Carregando tipos...' : 'Adicionar Dependente'}
+          </Button>
+        }
       />
 
-      <DataGrid columns={columns} rows={dependentes} rowKey={(d) => d.idDependente ?? d.CPF} loading={!carregado} />
+      <DataGrid columns={columns} rows={dependentes} rowKey={(d) => d.idDependente ?? d.CPF} loading={!carregado}
+        emptyMessage={erroDependentes ? 'Não foi possível consultar os dependentes.' : undefined} />
 
       <label className={`mt-4 flex items-center gap-2 text-sm text-brand ${dependentes.length ? 'opacity-50' : ''}`}>
         <input
           type="checkbox"
           checked={semDependentes}
-          disabled={dependentes.length > 0}
+          disabled={!carregado || erroDependentes || dependentes.length > 0}
           onChange={(e) => setSemDependentes(e.target.checked)}
           className="h-4 w-4 accent-[#1a3f86]"
         />
         Não possuo dependentes
       </label>
 
+      {/* A API atual tem cadastro e consulta de dependentes, sem rota de exclusão. */}
       <Modal open={aberto} title="Adicionar Dependente" onClose={fechar}>
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
           <Input label="Nome" {...register('Nome')} error={errors.Nome?.message} />
@@ -96,7 +118,7 @@ export default function Dependentes() {
             error={errors.Tipo_dependente_idTipo_dependente?.message}
           />
           <div className="mt-2 flex justify-end gap-2">
-            <Button variant="ghost" onClick={fechar}>Cancelar</Button>
+            <Button variant="ghost" disabled={salvando} onClick={fechar}>Cancelar</Button>
             <Button type="submit" disabled={salvando}>{salvando ? 'Salvando...' : 'Salvar'}</Button>
           </div>
         </form>

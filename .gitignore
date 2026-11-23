@@ -1,0 +1,27 @@
+# Configurações locais e credenciais
+database.properties
+.env
+.env.*
+!.env.example
+
+# Arquivos da IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Dependências e saídas geradas
+node_modules/
+target/
+dist/
+build/
+out/
+*.class
+*.tsbuildinfo
+*.log
+
+# Arquivos do sistema operacional
+.DS_Store
+Thumbs.db
+Desktop.ini

@@ -1,24 +1,36 @@
 import { z } from 'zod'
 
 const money = (label: string) =>
-  z.coerce.number({ invalid_type_error: `${label} inválido` }).min(0, `${label} não pode ser negativo`)
+  z.coerce.number({ error: `${label} inválido` }).min(0, `${label} não pode ser negativo`)
 
 export const contribuinteSchema = z.object({
   Nome: z.string().min(1, 'Informe o nome'),
   Sobrenome: z.string().min(1, 'Informe o sobrenome'),
-  Nome_Social: z.string().min(1, 'Informe o nome social'),
+  Nome_Social: z.string(),
   CPF: z.string().regex(/^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/, 'CPF inválido'),
   RG: z.string().min(1, 'Informe o RG'),
   Sexo: z.string().min(1, 'Informe o sexo'),
-  Email: z.string().email('E-mail inválido'),
-  Telefone: z.string().min(8, 'Informe o telefone'),
-  Rua: z.string().min(1, 'Informe a rua'),
-  Numero: z.string().min(1, 'Informe o número'),
+  Email: z.string().email('E-mail inválido').or(z.literal('')),
+  Telefone: z.string(),
+  Rua: z.string(),
+  Numero: z.string(),
   Complemento: z.string().optional(),
-  Bairro: z.string().min(1, 'Informe o bairro'),
-  Cidade: z.string().min(1, 'Informe a cidade'),
-  UF: z.string().length(2, 'UF inválida'),
-  CEP: z.string().regex(/^\d{5}-?\d{3}$/, 'CEP inválido'),
+  Bairro: z.string(),
+  Cidade: z.string(),
+  UF: z.string(),
+  CEP: z.string(),
+}).superRefine((form, ctx) => {
+  // O cadastro inicial pode não ter endereço. Se preenchido, a API precisa do endereço completo.
+  const campos = ['Rua', 'Numero', 'Bairro', 'Cidade', 'UF', 'CEP'] as const
+  if (!campos.some((campo) => form[campo].trim()) && !form.Complemento?.trim()) return
+  for (const campo of campos) {
+    if (!form[campo].trim()) {
+      ctx.addIssue({ code: 'custom', path: [campo], message: 'Campo obrigatório para salvar o endereço' })
+    }
+  }
+  if (form.CEP && !/^\d{5}-?\d{3}$/.test(form.CEP)) {
+    ctx.addIssue({ code: 'custom', path: ['CEP'], message: 'CEP inválido' })
+  }
 })
 
 export const dependenteSchema = z.object({
@@ -29,7 +41,7 @@ export const dependenteSchema = z.object({
 
 export const rendimentoSchema = z.object({
   CNPJ: z.string().regex(/^\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}$/, 'CNPJ obrigatório / inválido'),
-  nomeEmpresa: z.string().min(1, 'Informe o nome da empresa'),
+  nomeEmpresa: z.string(),
   Valor_Total_Recebido: money('Valor total').gt(100, 'O valor total deve ser maior que R$ 100,00'),
   INSS: money('INSS'),
   IRRF_pago: money('IRRF'),
@@ -37,7 +49,7 @@ export const rendimentoSchema = z.object({
 })
 
 export const bemSchema = z.object({
-  Tipo_Bem_idTipo_Bem: z.coerce.number().min(1, 'Selecione o tipo de bem'),
+  Tipo_Bem: z.string().trim().min(1, 'Informe o tipo de bem').max(45, 'Use até 45 caracteres'),
   Nome_bem: z.string().min(1, 'Informe o nome do bem'),
   Valor_ano_anterior: money('Valor do ano anterior'),
   Valor_31_12_2026: money('Valor em 31/12/2026'),

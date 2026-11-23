@@ -58,6 +58,40 @@ public class EnderecoDAO {
         return selecionarPorId(end.getIdEndereco());
     }
 
+    public Bairro selecionarBairroPorNome(String nomeBairro) throws SQLException {
+        String sql = "SELECT idBairro, Bairro FROM Bairro WHERE Bairro = ?";
+
+        try (PreparedStatement stmt = conexao.prepareStatement(sql)) {
+            stmt.setString(1, nomeBairro);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return new Bairro(rs.getInt("idBairro"), rs.getString("Bairro"));
+                }
+            }
+        }
+
+        return null;
+    }
+
+    public Bairro inserirBairro(String nomeBairro) throws SQLException {
+        String sql = "INSERT INTO Bairro (Bairro) VALUES (?)";
+
+        try (PreparedStatement stmt =
+                     conexao.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            stmt.setString(1, nomeBairro);
+            stmt.executeUpdate();
+
+            try (ResultSet chaves = stmt.getGeneratedKeys()) {
+                if (chaves.next()) {
+                    return new Bairro(chaves.getInt(1), nomeBairro);
+                }
+            }
+        }
+
+        throw new SQLException("O banco não retornou o ID do bairro cadastrado.");
+    }
+
     public Endereco selecionarPorId(int idEndereco) throws SQLException {
         String sql = SQL_BASE_SELECT + "WHERE e.idEndereco = ?";
         try (PreparedStatement stmt = conexao.prepareStatement(sql)) {

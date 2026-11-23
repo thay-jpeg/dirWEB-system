@@ -24,10 +24,8 @@ export interface DeclaracaoAuditoria {
   idDeclaracao: number
   anoExercicio: number
   status: StatusDeclaracao
-  dataEnvio: string
   contribuinte: ContribuinteAuditoria
   dependentes: Dependente[]
   rendimentos: Rendimento[]
   bens: Bem[]
-  justificativaRetencao?: string
 }

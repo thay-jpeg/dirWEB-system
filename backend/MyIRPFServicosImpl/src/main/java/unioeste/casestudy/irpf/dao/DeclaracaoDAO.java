@@ -6,7 +6,11 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
-
+import java.util.ArrayList;
+import unioeste.casestudy.irpf.bo.Contribuinte;
+import java.util.List;
+import unioeste.casestudy.irpf.bo.TipoBem;
+import unioeste.geral.pessoa.bo.PessoaJuridica;
 import unioeste.casestudy.irpf.bo.BemDireito;
 import unioeste.casestudy.irpf.bo.DeclaracaoRenda;
 import unioeste.casestudy.irpf.bo.RendimentoPJ;
@@ -49,6 +53,67 @@ public class DeclaracaoDAO {
             }
         }
     }
+    //Cabeçalho = (dec,pessoa)
+    public DeclaracaoRenda buscarCabecalho(int idPessoa, int idDeclaracao)
+            throws SQLException {
+        String sql = """
+            SELECT idDeclaracao_Renda, anoExercicio, status
+            FROM Declaracao_Renda
+            WHERE idDeclaracao_Renda = ?
+              AND Contribuinte_Pessoa_idPessoa = ?
+            """;
+
+        try (PreparedStatement stmt = conexao.prepareStatement(sql)) {
+            stmt.setInt(1, idDeclaracao);
+            stmt.setInt(2, idPessoa);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (!rs.next()) {
+                    return null;
+                }
+
+                DeclaracaoRenda declaracao = new DeclaracaoRenda();
+                declaracao.setIdDeclaracao(rs.getInt("idDeclaracao_Renda"));
+                declaracao.setAnoExercicio(rs.getInt("anoExercicio"));
+                declaracao.setStatus(rs.getString("status"));
+                return declaracao;
+            }
+        }
+    }
+
+    public List<DeclaracaoRenda> listarDeclaracoesParaAuditoria() throws SQLException {
+        String sql = """
+            SELECT d.idDeclaracao_Renda, d.anoExercicio, d.status,
+                   p.idPessoa, p.Nome, c.Sobrenome, c.CPF
+            FROM Declaracao_Renda d
+            JOIN Contribuinte c ON c.Pessoa_idPessoa = d.Contribuinte_Pessoa_idPessoa
+            JOIN Pessoa p ON p.idPessoa = c.Pessoa_idPessoa
+            WHERE d.status IN ('Enviada', 'Processada', 'Retida')
+            ORDER BY d.idDeclaracao_Renda DESC
+            """;
+
+        List<DeclaracaoRenda> declaracoes = new ArrayList<>();
+
+        try (PreparedStatement stmt = conexao.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+            while (rs.next()) {
+                Contribuinte titular = new Contribuinte();
+                titular.setIdPessoa(rs.getInt("idPessoa"));
+                titular.setNome(rs.getString("Nome"));
+                titular.setSobrenome(rs.getString("Sobrenome"));
+                titular.setCpf(rs.getString("CPF"));
+
+                DeclaracaoRenda declaracao = new DeclaracaoRenda();
+                declaracao.setIdDeclaracao(rs.getInt("idDeclaracao_Renda"));
+                declaracao.setAnoExercicio(rs.getInt("anoExercicio"));
+                declaracao.setStatus(rs.getString("status"));
+                declaracao.setContribuinte(titular);
+                declaracoes.add(declaracao);
+            }
+        }
+
+        return declaracoes;
+    }
 
     public void inserirRendimento(RendimentoPJ rend, int idDeclaracao, int idPessoaJuridica) throws SQLException {
         String sql = "INSERT INTO Rendimentos_trib_PJ " +
@@ -68,6 +133,90 @@ public class DeclaracaoDAO {
             }
             rend.setIdDeclaracao(idDeclaracao);
         }
+    }
+    //Lista dos rendimentos
+    public List<RendimentoPJ> listarRendimentos(int idDeclaracao) throws SQLException {
+        String sql = """
+            SELECT r.idRendimentos, r.Valor_Total_Recebido, r.Valor_13_salario,
+                   r.IRRF_pago, r.INSS, p.idPessoa, p.Nome, pj.CNPJ
+            FROM Rendimentos_trib_PJ r
+            JOIN Pessoa_Juridica pj ON pj.Pessoa_idPessoa = r.Pessoa_Juridica_Pessoa_idPessoa
+            JOIN Pessoa p ON p.idPessoa = pj.Pessoa_idPessoa
+            WHERE r.Declaracao_Renda_idDeclaracao_Renda = ?
+            ORDER BY r.idRendimentos
+            """;
+
+        List<RendimentoPJ> rendimentos = new ArrayList<>();
+
+        try (PreparedStatement stmt = conexao.prepareStatement(sql)) {
+            stmt.setInt(1, idDeclaracao);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    PessoaJuridica fonte = new PessoaJuridica();
+                    fonte.setIdPessoa(rs.getInt("idPessoa"));
+                    fonte.setNome(rs.getString("Nome"));
+                    fonte.setCnpj(rs.getString("CNPJ"));
+
+                    RendimentoPJ rendimento = new RendimentoPJ();
+                    rendimento.setIdRendimento(rs.getInt("idRendimentos"));
+                    rendimento.setIdDeclaracao(idDeclaracao);
+                    rendimento.setValorTotalRecebido(rs.getObject("Valor_Total_Recebido", Double.class));
+                    rendimento.setValor13Salario(rs.getObject("Valor_13_salario", Double.class));
+                    rendimento.setIrrfPago(rs.getObject("IRRF_pago", Double.class));
+                    rendimento.setInss(rs.getObject("INSS", Double.class));
+                    rendimento.setFontePagadora(fonte);
+                    rendimentos.add(rendimento);
+                }
+            }
+        }
+
+        return rendimentos;
+    }
+    //Lista dos bens
+    public List<BemDireito> listarBens(int idPessoa, int idDeclaracao)
+            throws SQLException {
+        String sql = """
+            SELECT b.idBens_direitos, b.Nome_bem, b.Valor_ano_anterior,
+                   b.Valor_31_12_2026, t.idTipo_Bem, t.descricao_tipo
+            FROM Bens_direitos b
+            LEFT JOIN Tipo_Bem t
+                ON t.Bens_direitos_idBens_direitos = b.idBens_direitos
+            WHERE b.Declaracao_Renda_idDeclaracao_Renda = ?
+              AND b.Contribuinte_Pessoa_idPessoa = ?
+            ORDER BY b.idBens_direitos
+            """;
+
+        List<BemDireito> bens = new ArrayList<>();
+
+        try (PreparedStatement stmt = conexao.prepareStatement(sql)) {
+            stmt.setInt(1, idDeclaracao);
+            stmt.setInt(2, idPessoa);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    BemDireito bem = new BemDireito();
+                    bem.setIdBem(rs.getInt("idBens_direitos"));
+                    bem.setNomeBem(rs.getString("Nome_bem"));
+                    bem.setValorAnoAnterior(rs.getObject("Valor_ano_anterior", Double.class));
+                    bem.setValorAtual(rs.getObject("Valor_31_12_2026", Double.class));
+                    bem.setIdContribuinte(idPessoa);
+                    bem.setIdDeclaracao(idDeclaracao);
+
+                    Integer idTipo = rs.getObject("idTipo_Bem", Integer.class);
+                    if (idTipo != null) {
+                        TipoBem tipo = new TipoBem();
+                        tipo.setIdTipoBem(idTipo);
+                        tipo.setDescricao(rs.getString("descricao_tipo"));
+                        bem.setTipoBem(tipo);
+                    }
+
+                    bens.add(bem);
+                }
+            }
+        }
+
+        return bens;
     }
 
     public void inserirBemComTipo(BemDireito bem, int idContribuinte, int idDeclaracao) throws SQLException {

@@ -1,6 +1,8 @@
 import type { Endereco } from '../types/models';
+import { api } from './api';
 
-const API_BASE_URL = 'http://localhost:8080/api/endereco';
+// Usa a mesma origem que as chamadas do IRPF.
+const API_BASE_URL = '/api/endereco';
 
 // Interfaces que representam o Objeto Composto retornado/esperado pelo Back-End Java (Pacote BO)
 export interface UFBackendDTO {
@@ -48,7 +50,8 @@ export interface EnderecoEspecificoBackendDTO {
 }
 
 // Converte o Objeto Composto do Back-End Java para a interface Endereco do Front-End (src/types/models.ts)
-function mapearBackendParaFrontend(dto: EnderecoBackendDTO): Endereco {
+// Reutilizado na leitura dos dados reais do contribuinte e da auditoria.
+export function mapearBackendParaFrontend(dto: EnderecoBackendDTO): Endereco {
   const tipo = dto.logradouro?.tipoLogradouro?.tipoLogradouro?.trim() || '';
   const nomeRua = dto.logradouro?.logradouro?.trim() || '';
   const logradouroCompleto = `${tipo} ${nomeRua}`.trim();
@@ -153,18 +156,17 @@ export async function obterEnderecoPorID(idEndereco: number): Promise<Endereco> 
  * 4. Serviço: obterEnderecoExterno (ViaCEP via Back-End Java)
  * Dado um CEP digitado no Front-End, retorna os dados do endereço obtidos da nuvem.
  */
-export async function obterEnderecoExterno(cep: string): Promise<Partial<Endereco> | null> {
+export async function obterEnderecoExterno(cep: string, signal?: AbortSignal): Promise<Endereco | null> {
   const cepLimpo = cep.replace(/\D/g, '');
   if (cepLimpo.length !== 8) {
     return null;
   }
 
-  const response = await fetch(`${API_BASE_URL}/obterEnderecoExterno/${encodeURIComponent(cepLimpo)}`);
-  if (!response.ok) {
-    return null;
-  }
-
-  const data = (await response.json()) as EnderecoEspecificoBackendDTO;
+  // Encaminha a consulta ao Java pelo mesmo cliente HTTP e preserva a mensagem de erro da API.
+  const { data } = await api.get<EnderecoEspecificoBackendDTO>(
+    `/endereco/obterEnderecoExterno/${cepLimpo}`,
+    { signal },
+  );
   if (!data?.endereco) {
     return null;
   }

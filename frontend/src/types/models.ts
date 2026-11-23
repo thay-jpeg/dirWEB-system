@@ -67,6 +67,7 @@ export interface Dependente {
 
 export interface Rendimento {
   idRendimentos?: number
+  chaveRascunho?: string
   CNPJ: string
   nomeEmpresa: string
   Valor_Total_Recebido: number
@@ -78,7 +79,8 @@ export interface Rendimento {
 export interface TipoBem { idTipo_Bem: number; descricao_tipo: string }
 export interface Bem {
   idBens_direitos?: number
-  Tipo_Bem_idTipo_Bem: number
+  chaveRascunho?: string
+  // A API registra o tipo pela descrição.
   Tipo_Bem?: string
   Nome_bem: string
   Valor_ano_anterior: number

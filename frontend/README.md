@@ -1,25 +1,18 @@
-# DIRweb – Front-end (IRPF 2026)
+# DIRweb – Frontend (IRPF 2026)
 
-React + TypeScript + Vite + Tailwind CSS · React Router · Zustand · Axios · React Hook Form + Zod.
+Inicie o backend Java e o MySQL antes de rodar o frontend.
 
 ```bash
 npm install
-cp .env.example .env   # ajuste VITE_API_URL
 npm run dev
 ```
 
-Estrutura: `src/components/{layout,ui}`, `src/pages`, `src/services`, `src/store`, `src/types`, `src/routes`.
-Protótipos e enunciados em `docs/` e `src/assets/`.
+O Vite encaminha `/api` para o backend em `http://localhost:8080`. Para usar outro endereço, copie `.env.example` para `.env` e ajuste `VITE_API_URL`. Uma hospedagem do build também precisa encaminhar `/api` para o backend na mesma origem.
 
-## Autenticação (mock estilo Gov.br)
-Rota `/login` (steps: CPF → senha | cadastro; "Esqueci minha senha" → código → nova senha). Após o login: `/home`.
-- Usuário de teste: **CPF 123.456.789-09 / senha `Senha@123`** (declaração com dados fictícios)
-- Código de recuperação (e-mail simulado): **123456**
-- Qualquer outro CPF válido cai no cadastro (perfilAcesso fixo `contribuinte`) e inicia com declaração vazia.
+## Fluxos integrados
 
-## Painel do Auditor Fiscal (mock)
-- Login do auditor: **CPF 999.999.999-99 / senha `Auditor@123`** → `/auditor`
-- Contribuintes do mock (senha `Senha@123`): 529.982.247-25 (Enviada), 111.444.777-35 (Processada), 390.533.447-05 (Retida), 168.995.350-09 (Enviada)
-- Telas: Triagem (`/auditor`), Auditoria (`/auditor/declaracoes/:id`), Gestão de Acessos (`/auditor/acessos`)
-- Alerta patrimonial: bens (31/12/2026) > 2× rendimentos anuais (Carlos e Ana disparam o alerta)
-- Para testar o cadastro de novo contribuinte use um CPF válido inexistente no mock, ex.: **453.178.287-91**
+- Em `/login`, informe o CPF e escolha **Continuar** ou **Criar conta**. O Java cria a sessão no login. O perfil vindo do banco abre a área do contribuinte ou do auditor. Atualizar a página pede um novo login.
+- Os dados do contribuinte e os dependentes são consultados no banco. O cadastro de dependente grava imediatamente. O formulário busca os tipos de dependência cadastrados no banco.
+- Os rendimentos e bens permanecem em memória enquanto a declaração é preenchida. **Enviar declaração** grava os dois em uma nova declaração. O Resumo mostra o ID retornado e permite consultar uma declaração salva pelo ID.
+- A triagem mostra as declarações retornadas pela API do auditor. Cada linha abre os detalhes.
+- Recuperação de senha, gestão de acessos, exclusão de dependentes e decisão de auditoria aguardam as respectivas rotas. A saída da interface limpa os dados locais. Encerrar a sessão Java exige uma rota de logout.

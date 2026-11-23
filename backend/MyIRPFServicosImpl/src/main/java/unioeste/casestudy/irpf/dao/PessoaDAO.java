@@ -11,6 +11,9 @@ import java.util.List;
 import unioeste.geral.pessoa.bo.Email;
 import unioeste.geral.pessoa.bo.Pessoa;
 import unioeste.geral.pessoa.bo.Telefone;
+import unioeste.geral.endereco.dao.EnderecoDAO;
+import unioeste.geral.pessoa.bo.DDD;
+import unioeste.geral.pessoa.bo.DDI;
 
 public class PessoaDAO {
     private final Connection conexao;
@@ -71,6 +74,71 @@ public class PessoaDAO {
                 stmt.executeUpdate();
                 try (ResultSet keys = stmt.getGeneratedKeys()) {
                     if (keys.next()) email.setIdEmail(keys.getInt(1));
+                }
+            }
+        }
+    }
+
+    public void carregarComplementos(Pessoa pessoa) throws SQLException {
+        int idPessoa = pessoa.getIdPessoa();
+        Integer idEndereco = null;
+
+        String sqlEndereco = "SELECT Endereco_idEndereco FROM Pessoa WHERE idPessoa = ?";
+        try (PreparedStatement stmt = conexao.prepareStatement(sqlEndereco)) {
+            stmt.setInt(1, idPessoa);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    idEndereco = rs.getObject("Endereco_idEndereco", Integer.class);
+                }
+            }
+        }
+
+        if (idEndereco != null) {
+            EnderecoDAO enderecoDAO = new EnderecoDAO(conexao);
+            pessoa.setEndereco(enderecoDAO.selecionarPorId(idEndereco));
+        }
+
+        String sqlEmails = "SELECT idEmail, Email FROM Email WHERE Pessoa_idPessoa = ?";
+        try (PreparedStatement stmt = conexao.prepareStatement(sqlEmails)) {
+            stmt.setInt(1, idPessoa);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Email email = new Email();
+                    email.setIdEmail(rs.getInt("idEmail"));
+                    email.setEmail(rs.getString("Email"));
+                    pessoa.getEmails().add(email);
+                }
+            }
+        }
+
+        String sqlTelefones = """
+            SELECT t.idTelefone, t.fone, d.idDDD, d.DDD, i.idDDI, i.DDI
+            FROM Telefone t
+            JOIN DDD d ON d.idDDD = t.DDD_idDDD
+                      AND d.DDI_idDDI = t.DDD_DDI_idDDI
+            JOIN DDI i ON i.idDDI = d.DDI_idDDI
+            WHERE t.Pessoa_idPessoa = ?
+            """;
+
+        try (PreparedStatement stmt = conexao.prepareStatement(sqlTelefones)) {
+            stmt.setInt(1, idPessoa);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    DDI ddi = new DDI();
+                    ddi.setIdDDI(rs.getInt("idDDI"));
+                    ddi.setDdi(rs.getString("DDI"));
+
+                    DDD ddd = new DDD();
+                    ddd.setIdDDD(rs.getInt("idDDD"));
+                    ddd.setDdd(rs.getString("DDD"));
+                    ddd.setDdi(ddi);
+
+                    Telefone telefone = new Telefone();
+                    telefone.setIdTelefone(rs.getInt("idTelefone"));
+                    telefone.setFone(rs.getString("fone"));
+                    telefone.setDdd(ddd);
+                    telefone.setDdi(ddi);
+                    pessoa.getTelefones().add(telefone);
                 }
             }
         }

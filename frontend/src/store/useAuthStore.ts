@@ -1,22 +1,23 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
 import type { SessaoUsuario } from '@/types'
+import { useDeclaracaoStore } from './useDeclaracaoStore'
 
 interface AuthState {
-  token: string | null
   usuario: SessaoUsuario | null
-  login: (token: string, usuario: SessaoUsuario) => void
+  login: (usuario: SessaoUsuario) => void
   logout: () => void
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
-      token: null,
-      usuario: null,
-      login: (token, usuario) => set({ token, usuario }),
-      logout: () => set({ token: null, usuario: null }),
-    }),
-    { name: 'dirweb-auth', storage: createJSONStorage(() => sessionStorage) },
-  ),
-)
+export const useAuthStore = create<AuthState>((set) => ({
+  // Sem uma rota de consulta de sessão, recarregar a página pede novo login.
+  usuario: null,
+  login: (usuario) => {
+    useDeclaracaoStore.getState().reset()
+    set({ usuario })
+  },
+  logout: () => {
+    // A API ainda não tem logout. Limpa a interface e os dados em memória.
+    useDeclaracaoStore.getState().reset()
+    set({ usuario: null })
+  },
+}))

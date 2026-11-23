@@ -1,26 +1,54 @@
 import type { DeclaracaoAuditoria, StatusDeclaracao } from '@/types'
-import { mockDeclaracoes } from './mockAuditoria'
+import { api } from './api'
+import { declaracaoService, mapearBem, mapearContribuinte, mapearDependente, mapearRendimento } from './declaracaoService'
+import type { DeclaracaoApi } from './declaracaoService'
 
-const DELAY_MS = 500
-const delay = <T,>(v: T): Promise<T> => new Promise((res) => setTimeout(() => res(structuredClone(v)), DELAY_MS))
-const fail = (m: string): Promise<never> => new Promise((_, rej) => setTimeout(() => rej(new Error(m)), DELAY_MS))
+function statusAuditoria(status: string): status is StatusDeclaracao {
+  return status === 'Enviada' || status === 'Processada' || status === 'Retida'
+}
 
-const db: DeclaracaoAuditoria[] = structuredClone(mockDeclaracoes)
+function mapearDeclaracao(declaracao: DeclaracaoApi): DeclaracaoAuditoria {
+  if (!statusAuditoria(declaracao.status)) {
+    throw new Error('Esta declaração ainda não está disponível na triagem.')
+  }
 
-const alterar = (id: number, status: StatusDeclaracao, justificativa?: string) => {
-  const d = db.find((x) => x.idDeclaracao === id)
-  if (!d) return fail('Declaração não encontrada')
-  d.status = status
-  d.justificativaRetencao = status === 'Retida' ? justificativa : undefined
-  return delay(d)
+  const dados = mapearContribuinte(declaracao.contribuinte)
+  return {
+    idDeclaracao: declaracao.idDeclaracao,
+    anoExercicio: declaracao.anoExercicio,
+    status: declaracao.status,
+    contribuinte: {
+      cpf: dados.CPF,
+      nome: dados.Nome,
+      sobrenome: dados.Sobrenome,
+      nomeSocial: dados.Nome_Social,
+      rg: dados.RG,
+      sexo: dados.Sexo,
+      email: dados.Email,
+      telefone: dados.Telefone,
+      endereco: [dados.Rua, dados.Numero, dados.Complemento, dados.Bairro, dados.Cidade, dados.UF, dados.CEP]
+        .filter(Boolean).join(', '),
+    },
+    dependentes: declaracao.dependentes.map(mapearDependente),
+    rendimentos: declaracao.rendimentos.map(mapearRendimento),
+    bens: declaracao.bensDireitos.map(mapearBem),
+  }
+}
+
+async function consultarTriagem() {
+  const { data } = await api.get<DeclaracaoApi[]>('/irpf/auditoria/declaracoes')
+  return data
 }
 
 export const auditoriaService = {
-  listarDeclaracoes: () => delay(db),
-  obterDeclaracao: (id: number) => {
-    const d = db.find((x) => x.idDeclaracao === id)
-    return d ? delay(d) : fail('Declaração não encontrada')
+  async listarDeclaracoes() {
+    return (await consultarTriagem()).map(mapearDeclaracao)
   },
-  aprovarDeclaracao: (id: number) => alterar(id, 'Processada'),
-  reterEmMalhaFina: (id: number, justificativa: string) => alterar(id, 'Retida', justificativa),
+
+  async obterDeclaracao(idDeclaracao: number) {
+    // Valida a sessão na triagem e obtém o titular antes de carregar o detalhe.
+    const item = (await consultarTriagem()).find((d) => d.idDeclaracao === idDeclaracao)
+    if (!item) throw new Error('Declaração não encontrada na triagem.')
+    return mapearDeclaracao(await declaracaoService.consultarDeclaracao(item.contribuinte.idPessoa, idDeclaracao))
+  },
 }

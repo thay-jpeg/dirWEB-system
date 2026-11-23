@@ -17,9 +17,14 @@ import unioeste.casestudy.irpf.dao.DependenteDAO;
 import unioeste.casestudy.irpf.dao.PessoaDAO;
 import unioeste.casestudy.irpf.dao.PessoaJuridicaDAO;
 import unioeste.geral.endereco.bo.Endereco;
+import unioeste.casestudy.irpf.bo.Contribuinte;
 import unioeste.geral.endereco.manager.EnderecoException;
 import unioeste.geral.endereco.manager.UCEnderecoGeralServicos;
 import unioeste.geral.pessoa.bo.PessoaJuridica;
+import java.sql.SQLException;
+import unioeste.casestudy.irpf.bo.TipoDependencia;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 public class UCIRPFServicos {
 
@@ -71,6 +76,33 @@ public class UCIRPFServicos {
                 conn.rollback();
                 throw new Exception("Erro de infraestrutura ao cadastrar contribuinte: " + e.getMessage(), e);
             }
+        }
+    }
+
+    public UsuarioAcesso autenticar(String cpf, String senha) throws SQLException {
+        if (!irpfCol.validarCPF(cpf) || senha == null || senha.isEmpty()) {
+            return null;
+        }
+
+        try (Connection conn = ConexaoBD.getConexao()) {
+            ContribuinteDAO dao = new ContribuinteDAO(conn);
+            UsuarioAcesso usuario = dao.buscarUsuarioPorCpf(irpfCol.limparDigitos(cpf));
+
+            if (usuario == null || usuario.getSenhaHash() == null) {
+                return null;
+            }
+
+            String hashInformado = irpfCol.gerarHashSenha(senha);
+            boolean senhaCorreta = MessageDigest.isEqual(
+                    hashInformado.getBytes(StandardCharsets.UTF_8),
+                    usuario.getSenhaHash().getBytes(StandardCharsets.UTF_8));
+
+            if (!senhaCorreta) {
+                return null;
+            }
+
+            usuario.setSenhaHash(null);
+            return usuario;
         }
     }
 
@@ -128,7 +160,7 @@ public class UCIRPFServicos {
 
                 depDAO.inserir(dependente, idContribuinte);
                 dependente.getContribuinte().setIdPessoa(idContribuinte);
-
+                //commit do fluxo "final feliz"
                 conn.commit();
                 return dependente;
             } catch (IRPFException e) {
@@ -138,6 +170,84 @@ public class UCIRPFServicos {
                 conn.rollback();
                 throw new Exception("Erro de infraestrutura ao cadastrar dependente: " + e.getMessage(), e);
             }
+        }
+    }
+
+    //Lista os tipos de dependência cadastrados no banco.(filhos, pais, etc.)
+    public List<TipoDependencia> listarTiposDependencia() throws SQLException {
+        try (Connection conn = ConexaoBD.getConexao()) {
+            DependenteDAO dependenteDAO = new DependenteDAO(conn);
+            return dependenteDAO.listarTiposDependencia();
+        }
+    }
+    //Lista os dependetes de um contribuinte
+    public List<Dependente> listarDependentes(int idPessoa)
+            throws IRPFException, SQLException {
+        if (idPessoa <= 0) {
+            throw new IRPFException("Informe um ID de contribuinte válido.");
+        }
+
+        try (Connection conn = ConexaoBD.getConexao()) {
+            ContribuinteDAO contribuinteDAO = new ContribuinteDAO(conn);
+
+            if (!contribuinteDAO.existePorId(idPessoa)) {
+                throw new IRPFException("Contribuinte não encontrado.");
+            }
+
+            DependenteDAO dependenteDAO = new DependenteDAO(conn);
+            return dependenteDAO.listarPorContribuinte(idPessoa);
+        }
+    }
+    //Consulta do Contribuinte
+    public Contribuinte consultarContribuinte(String cpf)
+            throws IRPFException, SQLException {
+        if (!irpfCol.validarCPF(cpf)) {
+            throw new IRPFException("CPF inválido.");
+        }
+
+        try (Connection conn = ConexaoBD.getConexao()) {
+            ContribuinteDAO dao = new ContribuinteDAO(conn);
+            Integer idPessoa = dao.buscarIdPorCpf(irpfCol.limparDigitos(cpf));
+
+            if (idPessoa == null) {
+                throw new IRPFException("Contribuinte não encontrado.");
+            }
+
+            return carregarContribuinte(conn, idPessoa);
+        }
+    }
+
+    private Contribuinte carregarContribuinte(Connection conn, int idPessoa)
+            throws IRPFException, SQLException {
+        ContribuinteDAO dao = new ContribuinteDAO(conn);
+        Contribuinte contribuinte = dao.buscarPorId(idPessoa);
+
+        if (contribuinte == null) {
+            throw new IRPFException("Contribuinte não encontrado.");
+        }
+
+        PessoaDAO pessoaDAO = new PessoaDAO(conn);
+        pessoaDAO.carregarComplementos(contribuinte);
+        return contribuinte;
+    }
+    //Consulta Fonte Pagadora
+    public PessoaJuridica consultarFontePagadora(String cnpj)
+            throws IRPFException, SQLException {
+        if (!irpfCol.validarCNPJ(cnpj)) {
+            throw new IRPFException("CNPJ inválido.");
+        }
+
+        try (Connection conn = ConexaoBD.getConexao()) {
+            PessoaJuridicaDAO dao = new PessoaJuridicaDAO(conn);
+            PessoaJuridica empresa = dao.buscarPorCnpj(irpfCol.limparDigitos(cnpj));
+
+            if (empresa == null) {
+                throw new IRPFException("Fonte pagadora não encontrada.");
+            }
+
+            PessoaDAO pessoaDAO = new PessoaDAO(conn);
+            pessoaDAO.carregarComplementos(empresa);
+            return empresa;
         }
     }
 
@@ -228,6 +338,40 @@ public class UCIRPFServicos {
                 conn.rollback();
                 throw new Exception("Erro de infraestrutura ao registrar bens: " + e.getMessage(), e);
             }
+        }
+    }
+
+    public List<BemDireito> listarBens(int idPessoa, int idDeclaracao)
+            throws IRPFException, SQLException {
+        try (Connection conn = ConexaoBD.getConexao()) {
+            DeclaracaoDAO dao = new DeclaracaoDAO(conn);
+            carregarCabecalho(dao, idPessoa, idDeclaracao);
+            return dao.listarBens(idPessoa, idDeclaracao);
+        }
+    }
+    //Consulta Geral Dec
+    public DeclaracaoRenda consultarDeclaracao(int idPessoa, int idDeclaracao)
+            throws IRPFException, SQLException {
+        try (Connection conn = ConexaoBD.getConexao()) {
+            DeclaracaoDAO declaracaoDAO = new DeclaracaoDAO(conn);
+            DependenteDAO dependenteDAO = new DependenteDAO(conn);
+
+            DeclaracaoRenda declaracao =
+                    carregarCabecalho(declaracaoDAO, idPessoa, idDeclaracao);
+
+            declaracao.setContribuinte(carregarContribuinte(conn, idPessoa));
+            declaracao.setDependentes(dependenteDAO.listarPorContribuinte(idPessoa));
+            declaracao.setBensDireitos(declaracaoDAO.listarBens(idPessoa, idDeclaracao));
+            declaracao.setRendimentos(declaracaoDAO.listarRendimentos(idDeclaracao));
+
+            return declaracao;
+        }
+    }
+
+    public List<DeclaracaoRenda> listarDeclaracoesParaAuditoria() throws SQLException {
+        try (Connection conn = ConexaoBD.getConexao()) {
+            DeclaracaoDAO dao = new DeclaracaoDAO(conn);
+            return dao.listarDeclaracoesParaAuditoria();
         }
     }
 
@@ -333,6 +477,18 @@ public class UCIRPFServicos {
             throw new IRPFException("Contribuinte não encontrado para o CPF informado.");
         }
         return id;
+    }
+
+    private DeclaracaoRenda carregarCabecalho(
+            DeclaracaoDAO dao, int idPessoa, int idDeclaracao)
+            throws IRPFException, SQLException {
+        DeclaracaoRenda declaracao = dao.buscarCabecalho(idPessoa, idDeclaracao);
+
+        if (declaracao == null) {
+            throw new IRPFException("Declaração não encontrada para esse contribuinte.");
+        }
+
+        return declaracao;
     }
 
     private Endereco resolverEndereco(Endereco endereco) throws IRPFException, Exception {

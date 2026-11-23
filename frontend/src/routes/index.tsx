@@ -16,14 +16,15 @@ import { homePorPerfil } from '@/utils/perfil'
 import type { PerfilAcesso } from '@/types'
 
 function RequireAuth({ perfil }: { perfil: PerfilAcesso }) {
-  const { token, usuario } = useAuthStore()
-  if (!token || !usuario) return <Navigate to="/login" replace />
+  // As rotas da interface usam o perfil que veio do login da API.
+  const usuario = useAuthStore((s) => s.usuario)
+  if (!usuario) return <Navigate to="/login" replace />
   if (usuario.perfilAcesso !== perfil) return <Navigate to={homePorPerfil(usuario.perfilAcesso)} replace />
   return <Outlet />
 }
 function PublicOnly() {
-  const { token, usuario } = useAuthStore()
-  return token && usuario ? <Navigate to={homePorPerfil(usuario.perfilAcesso)} replace /> : <Outlet />
+  const usuario = useAuthStore((s) => s.usuario)
+  return usuario ? <Navigate to={homePorPerfil(usuario.perfilAcesso)} replace /> : <Outlet />
 }
 function HomeRedirect() {
   const usuario = useAuthStore((s) => s.usuario)

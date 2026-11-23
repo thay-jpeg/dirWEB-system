@@ -58,12 +58,75 @@ public class ContribuinteDAO {
         }
     }
 
+    public UsuarioAcesso buscarUsuarioPorCpf(String cpf) throws SQLException {
+        String sql = """
+            SELECT u.loginCpf, u.senhaHash, u.perfilAcesso,
+                   p.idPessoa, p.Nome, c.Sobrenome
+            FROM UsuarioAcesso u
+            JOIN Contribuinte c ON c.Pessoa_idPessoa = u.Contribuinte_Pessoa_idPessoa
+            JOIN Pessoa p ON p.idPessoa = c.Pessoa_idPessoa
+            WHERE u.loginCpf = ?
+            """;
+
+        try (PreparedStatement stmt = conexao.prepareStatement(sql)) {
+            stmt.setString(1, cpf);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (!rs.next()) {
+                    return null;
+                }
+
+                Contribuinte contribuinte = new Contribuinte();
+                contribuinte.setIdPessoa(rs.getInt("idPessoa"));
+                contribuinte.setNome(rs.getString("Nome"));
+                contribuinte.setSobrenome(rs.getString("Sobrenome"));
+
+                UsuarioAcesso usuario = new UsuarioAcesso();
+                usuario.setLoginCpf(rs.getString("loginCpf"));
+                usuario.setSenhaHash(rs.getString("senhaHash"));
+                usuario.setPerfilAcesso(rs.getString("perfilAcesso"));
+                usuario.setContribuinte(contribuinte);
+                return usuario;
+            }
+        }
+    }
+
     public Integer buscarIdPorCpf(String cpfLimpo) throws SQLException {
         String sql = "SELECT Pessoa_idPessoa FROM Contribuinte WHERE CPF = ?";
         try (PreparedStatement stmt = conexao.prepareStatement(sql)) {
             stmt.setString(1, cpfLimpo);
             try (ResultSet rs = stmt.executeQuery()) {
                 return rs.next() ? rs.getInt("Pessoa_idPessoa") : null;
+            }
+        }
+    }
+
+    public Contribuinte buscarPorId(int idPessoa) throws SQLException {
+        String sql = """
+            SELECT p.idPessoa, p.Nome, c.Sobrenome, c.Nome_Social,
+                   c.CPF, c.RG, c.Sexo
+            FROM Contribuinte c
+            JOIN Pessoa p ON p.idPessoa = c.Pessoa_idPessoa
+            WHERE p.idPessoa = ?
+            """;
+
+        try (PreparedStatement stmt = conexao.prepareStatement(sql)) {
+            stmt.setInt(1, idPessoa);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (!rs.next()) {
+                    return null;
+                }
+
+                Contribuinte contribuinte = new Contribuinte();
+                contribuinte.setIdPessoa(rs.getInt("idPessoa"));
+                contribuinte.setNome(rs.getString("Nome"));
+                contribuinte.setSobrenome(rs.getString("Sobrenome"));
+                contribuinte.setNomeSocial(rs.getString("Nome_Social"));
+                contribuinte.setCpf(rs.getString("CPF"));
+                contribuinte.setRg(rs.getString("RG"));
+                contribuinte.setSexo(rs.getString("Sexo"));
+                return contribuinte;
             }
         }
     }
