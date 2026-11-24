@@ -70,11 +70,11 @@ export function mapearBackendParaFrontend(dto: EnderecoBackendDTO): Endereco {
 }
 
 // Converte a interface Endereco do Front-End (src/types/models.ts) para o Objeto Composto do Back-End Java
-function mapearFrontendParaBackend(end: Endereco): EnderecoBackendDTO {
+export function mapearFrontendParaBackend(end: Endereco): EnderecoBackendDTO {
   const ruaLimpa = (end.Logradouro || '').trim();
-  const partes = ruaLimpa.split(' ');
-  const tipoLogradouro = partes.length > 1 ? partes[0] : 'Rua';
-  const nomeLogradouro = partes.length > 1 ? partes.slice(1).join(' ') : ruaLimpa;
+  const comTipo = /^(Rua|Avenida|Travessa|Alameda|Praça|Estrada|Rodovia|Largo|Beco|Viela|Passagem)\s+(.+)$/i.exec(ruaLimpa);
+  const tipoLogradouro = comTipo?.[1] ?? 'Rua';
+  const nomeLogradouro = comTipo?.[2] ?? ruaLimpa;
 
   return {
     idEndereco: end.idEndereco,

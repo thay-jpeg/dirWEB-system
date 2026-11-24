@@ -92,6 +92,67 @@ public class EnderecoDAO {
         throw new SQLException("O banco não retornou o ID do bairro cadastrado.");
     }
 
+    public TipoLogradouro selecionarTipoLogradouroPorNome(String nome) throws SQLException {
+        String sql = "SELECT idTipo_logradouro, Tipo_logradouro FROM Tipo_logradouro WHERE Tipo_logradouro = ?";
+        try (PreparedStatement stmt = conexao.prepareStatement(sql)) {
+            stmt.setString(1, nome);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return new TipoLogradouro(rs.getInt("idTipo_logradouro"), rs.getString("Tipo_logradouro"));
+                }
+            }
+        }
+        return null;
+    }
+
+    public TipoLogradouro inserirTipoLogradouro(String nome) throws SQLException {
+        String sql = "INSERT INTO Tipo_logradouro (Tipo_logradouro) VALUES (?)";
+        try (PreparedStatement stmt = conexao.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            stmt.setString(1, nome);
+            stmt.executeUpdate();
+            try (ResultSet chaves = stmt.getGeneratedKeys()) {
+                if (chaves.next()) {
+                    return new TipoLogradouro(chaves.getInt(1), nome);
+                }
+            }
+        }
+        throw new SQLException("O banco não retornou o ID do tipo de logradouro.");
+    }
+
+    public Logradouro selecionarLogradouroPorNomeETipo(String nome, TipoLogradouro tipo)
+            throws SQLException {
+        String sql = """
+            SELECT idLogradouro, Logradouro
+            FROM Logradouro
+            WHERE Logradouro = ? AND Tipo_logradouro_idTipo_logradouro = ?
+            """;
+        try (PreparedStatement stmt = conexao.prepareStatement(sql)) {
+            stmt.setString(1, nome);
+            stmt.setInt(2, tipo.getIdTipoLogradouro());
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return new Logradouro(rs.getInt("idLogradouro"), rs.getString("Logradouro"), tipo);
+                }
+            }
+        }
+        return null;
+    }
+
+    public Logradouro inserirLogradouro(String nome, TipoLogradouro tipo) throws SQLException {
+        String sql = "INSERT INTO Logradouro (Logradouro, Tipo_logradouro_idTipo_logradouro) VALUES (?, ?)";
+        try (PreparedStatement stmt = conexao.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            stmt.setString(1, nome);
+            stmt.setInt(2, tipo.getIdTipoLogradouro());
+            stmt.executeUpdate();
+            try (ResultSet chaves = stmt.getGeneratedKeys()) {
+                if (chaves.next()) {
+                    return new Logradouro(chaves.getInt(1), nome, tipo);
+                }
+            }
+        }
+        throw new SQLException("O banco não retornou o ID do logradouro.");
+    }
+
     public Endereco selecionarPorId(int idEndereco) throws SQLException {
         String sql = SQL_BASE_SELECT + "WHERE e.idEndereco = ?";
         try (PreparedStatement stmt = conexao.prepareStatement(sql)) {

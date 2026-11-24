@@ -26,12 +26,20 @@ export default function DadosContribuinte() {
 
   const { register, handleSubmit, reset, getValues, setValue, setError, clearErrors, formState: { errors } } = useForm<ContribuinteSchema>({
     resolver: zodResolver(contribuinteSchema),
+    defaultValues: { DDITelefone: '55' },
   })
 
   const usuario = useAuthStore((s) => s.usuario)
   useEffect(() => {
     if (contribuinte) reset(contribuinte)
-    else if (usuario) reset({ Nome: usuario.nome, Sobrenome: usuario.sobrenome, CPF: usuario.loginCpf })
+      else if (usuario) {
+        reset({
+          Nome: usuario.nome,
+          Sobrenome: usuario.sobrenome,
+          CPF: usuario.loginCpf,
+          DDITelefone: '55',
+        })
+      }
   }, [contribuinte, usuario, reset])
 
   useEffect(() => () => consultaCep.current?.abort(), [])
@@ -165,13 +173,26 @@ export default function DadosContribuinte() {
       </div>
 
       <h2 className="mb-3 mt-7 text-base font-bold text-brand">Contato</h2>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Input label="E-mail" type="email" {...register('Email')} error={errors.Email?.message} />
-        <Input readOnly label="Telefone" mask={maskTelefone} placeholder="(00) 00000-0000" {...register('Telefone')} error={errors.Telefone?.message} />
-      </div>
+<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+  <Input label="E-mail" type="email" {...register('Email')} error={errors.Email?.message} />
 
-      {/* O telefone exige IDs de DDD e DDI que a API atual ainda não lista. */}
-      <p className="mt-2 text-sm text-neutral-600">O telefone cadastrado está disponível para consulta.</p>
+  <div className="grid grid-cols-[5rem_minmax(0,1fr)] gap-3">
+    <Input
+      label="DDI"
+      type="tel"
+      {...register('DDITelefone')}
+      error={errors.DDITelefone?.message}
+    />
+    <Input
+      label="DDD e telefone"
+      type="tel"
+      mask={maskTelefone}
+      placeholder="(00) 00000-0000"
+      {...register('Telefone')}
+      error={errors.Telefone?.message}
+    />
+  </div>
+</div>
 
       <div className="mt-8 flex justify-end">
         <Button type="submit" disabled={salvando || buscandoCep || erroContribuinte} className="px-8">{salvando ? 'Salvando...' : 'Salvar dados'}</Button>

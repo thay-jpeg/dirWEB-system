@@ -1,7 +1,8 @@
 import type { Bem, ContribuinteForm, Dependente, Rendimento, SessaoUsuario, TipoDependente } from '@/types'
 import { api, ErroApi } from './api'
-import { mapearBackendParaFrontend } from './enderecoservice'
+import { mapearBackendParaFrontend, mapearFrontendParaBackend } from './enderecoservice'
 import type { EnderecoBackendDTO } from './enderecoservice'
+
 
 type TipoDependenciaApi = { idTipoDependencia: number; descricao: string | null }
 type FontePagadoraApi = { cnpj: string; nome: string }
@@ -15,7 +16,7 @@ export type ContribuinteApi = {
   sexo: string | null
   endereco: EnderecoBackendDTO | null
   emails: { email: string }[]
-  telefones: { fone: string; ddd: { ddd: string } | null }[]
+  telefones: { fone: string; ddd: { ddd: string } | null; ddi?: { ddi: string } | null }[]
 }
 type DependenteApi = { idDependente: number; nome: string; cpf: string; tipoDependencia: TipoDependenciaApi }
 type RendimentoApi = {
@@ -60,6 +61,7 @@ export function mapearContribuinte(pessoa: ContribuinteApi): ContribuinteForm {
     RG: pessoa.rg ?? '',
     Sexo: pessoa.sexo ?? '',
     Email: pessoa.emails[0]?.email ?? '',
+    DDITelefone: digitos(telefone?.ddi?.ddi ?? '55'),
     Telefone: telefone ? [telefone.ddd?.ddd, telefone.fone].filter(Boolean).join(' ') : '',
     Rua: endereco?.Logradouro ?? '',
     Numero: endereco?.Numero ?? '',
@@ -135,7 +137,15 @@ async function resolverEndereco(form: ContribuinteForm, atual: EnderecoBackendDT
 
   const modelo = validos[0]
   if (!modelo) {
-    throw new Error('O endereço precisa de cidade, bairro e rua já cadastrados para este CEP.')
+    return mapearFrontendParaBackend({
+      CEP: cep,
+      Numero: form.Numero.trim(),
+      Complemento: form.Complemento?.trim(),
+      Bairro: form.Bairro,
+      Logradouro: form.Rua,
+      Cidade: form.Cidade,
+      UF: form.UF,
+    })
   }
 
   return {
@@ -157,6 +167,33 @@ export const declaracaoService = {
     const endereco = await resolverEndereco(form, atual.endereco)
     const emails = atual.emails.slice(1)
     if (form.Email.trim()) emails.unshift({ email: form.Email.trim() })
+      const numero = digitos(form.Telefone)
+const ddiDigitado = form.DDITelefone.trim()
+
+if (numero && !/^\+?[1-9]\d{0,2}$/.test(ddiDigitado)) {
+  throw new Error('Informe um DDI com 1 a 3 dígitos, como +55.')
+}
+
+const codigoDdi = digitos(ddiDigitado)
+const telefoneAtual = atual.telefones[0]
+const numeroAtual = telefoneAtual
+  ? digitos((telefoneAtual.ddd?.ddd ?? '') + telefoneAtual.fone)
+  : ''
+const ddiAtual = digitos(telefoneAtual?.ddi?.ddi ?? '55')
+const alterouTelefone = numero !== '' &&
+  (numero !== numeroAtual || codigoDdi !== ddiAtual)
+
+if (alterouTelefone && !/^\d{10,11}$/.test(numero)) {
+  throw new Error('Informe o DDD e um telefone com 8 ou 9 dígitos.')
+}
+
+const telefones = alterouTelefone
+  ? [{
+      fone: numero.slice(2),
+      ddd: { ddd: numero.slice(0, 2) },
+      ddi: { ddi: codigoDdi },
+    }, ...atual.telefones.slice(1)]
+  : atual.telefones
 
     const { data } = await api.put<ContribuinteApi>('/irpf/atualizarDadosContribuinte', {
       idPessoa: usuario.idPessoa,
@@ -168,7 +205,7 @@ export const declaracaoService = {
       sexo: form.Sexo,
       endereco,
       emails,
-      telefones: atual.telefones,
+      telefones,
     })
     return mapearContribuinte(data)
   },

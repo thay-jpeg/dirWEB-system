@@ -11,6 +11,7 @@ export const contribuinteSchema = z.object({
   RG: z.string().min(1, 'Informe o RG'),
   Sexo: z.string().min(1, 'Informe o sexo'),
   Email: z.string().email('E-mail inválido').or(z.literal('')),
+  DDITelefone: z.string(),
   Telefone: z.string(),
   Rua: z.string(),
   Numero: z.string(),

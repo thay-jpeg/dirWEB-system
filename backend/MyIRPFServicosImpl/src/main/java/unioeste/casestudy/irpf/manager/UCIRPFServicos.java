@@ -18,6 +18,9 @@ import unioeste.casestudy.irpf.dao.PessoaDAO;
 import unioeste.casestudy.irpf.dao.PessoaJuridicaDAO;
 import unioeste.geral.endereco.bo.Endereco;
 import unioeste.casestudy.irpf.bo.Contribuinte;
+import unioeste.geral.pessoa.bo.DDD;
+import unioeste.geral.pessoa.bo.DDI;
+import unioeste.geral.pessoa.bo.Telefone;
 import unioeste.geral.endereco.manager.EnderecoException;
 import unioeste.geral.endereco.manager.UCEnderecoGeralServicos;
 import unioeste.geral.pessoa.bo.PessoaJuridica;
@@ -122,6 +125,8 @@ public class UCIRPFServicos {
                 contrib.setIdPessoa(idPessoa);
 
                 PessoaDAO pessoaDAO = new PessoaDAO(conn);
+                resolverTelefonesPorCodigo(contrib.getTelefones(), pessoaDAO);
+                pessoaDAO.atualizarPessoa(contrib);
                 pessoaDAO.atualizarPessoa(contrib);
                 contribDAO.atualizarContribuinte(contrib);
                 pessoaDAO.substituirEmails(idPessoa, contrib.getEmails());
@@ -499,6 +504,52 @@ public class UCIRPFServicos {
             return enderecoServicos.cadastrarEndereco(endereco);
         } catch (EnderecoException e) {
             throw new IRPFException("Erro no serviço de endereço: " + e.getMessage());
+        }
+    }
+
+    private void resolverTelefonesPorCodigo(List<Telefone> telefones, PessoaDAO pessoaDAO)
+            throws IRPFException, SQLException {
+        if (telefones == null) {
+            return;
+        }
+
+        for (Telefone telefone : telefones) {
+            if (telefone == null || telefone.getFone() == null
+                    || telefone.getFone().isBlank() || telefone.getDdd() == null) {
+                throw new IRPFException("Informe o número e o DDD do telefone.");
+            }
+
+            DDD ddd = telefone.getDdd();
+            DDI ddi = telefone.getDdi();
+            DDI ddiDoDdd = ddd.getDdi();
+
+            Integer idDdi = ddi == null ? null : ddi.getIdDDI();
+            if (idDdi == null && ddiDoDdd != null) {
+                idDdi = ddiDoDdd.getIdDDI();
+            }
+
+            if (ddd.getIdDDD() != null && ddd.getIdDDD() > 0 && idDdi != null && idDdi > 0) {
+                continue;
+            }
+
+            String codigoDdd = ddd.getDdd();
+            String codigoDdi = ddi == null ? null : ddi.getDdi();
+            if ((codigoDdi == null || codigoDdi.isBlank()) && ddiDoDdd != null) {
+                codigoDdi = ddiDoDdd.getDdi();
+            }
+
+            if (codigoDdd == null || codigoDdd.isBlank()
+                    || codigoDdi == null || codigoDdi.isBlank()) {
+                throw new IRPFException("Informe os códigos de DDD e DDI.");
+            }
+
+            DDD encontrado = pessoaDAO.selecionarDddPorCodigoEDdi(codigoDdd, codigoDdi);
+            if (encontrado == null) {
+                throw new IRPFException("O par de DDD e DDI não está cadastrado no banco.");
+            }
+
+            telefone.setDdd(encontrado);
+            telefone.setDdi(encontrado.getDdi());
         }
     }
 }

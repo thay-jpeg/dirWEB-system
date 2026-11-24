@@ -104,6 +104,7 @@ export interface ContribuinteForm {
   RG: string
   Sexo: string
   Email: string
+  DDITelefone: string
   Telefone: string
   Rua: string
   Numero: string

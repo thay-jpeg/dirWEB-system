@@ -144,6 +144,42 @@ public class PessoaDAO {
         }
     }
 
+
+    public DDD selecionarDddPorCodigoEDdi(String codigoDdd, String codigoDdi)
+            throws SQLException {
+        String sql = """
+            SELECT d.idDDD, d.DDD, i.idDDI, i.DDI
+            FROM DDD d
+            JOIN DDI i ON i.idDDI = d.DDI_idDDI
+            WHERE d.DDD = ?
+              AND REPLACE(TRIM(i.DDI), '+', '') = ?
+            """;
+
+        try (PreparedStatement stmt = conexao.prepareStatement(sql)) {
+            stmt.setString(1, codigoDdd.trim());
+            stmt.setString(2, codigoDdi.replace("+", "").trim());
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (!rs.next()) {
+                    return null;
+                }
+
+                DDI ddi = new DDI();
+                ddi.setIdDDI(rs.getInt("idDDI"));
+                ddi.setDdi(rs.getString("DDI"));
+
+                DDD ddd = new DDD();
+                ddd.setIdDDD(rs.getInt("idDDD"));
+                ddd.setDdd(rs.getString("DDD"));
+                ddd.setDdi(ddi);
+
+                return ddd;
+            }
+        }
+    }
+
+
+
     public void substituirTelefones(int idPessoa, List<Telefone> telefones) throws SQLException {
         if (telefones == null || telefones.isEmpty()) return;
 

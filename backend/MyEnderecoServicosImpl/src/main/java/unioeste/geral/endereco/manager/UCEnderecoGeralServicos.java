@@ -12,6 +12,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.sql.Connection;
 import java.util.List;
+import java.sql.SQLException;
 
 public class UCEnderecoGeralServicos {
 
@@ -20,19 +21,27 @@ public class UCEnderecoGeralServicos {
 
     // 1. cadastrarEndereco
     public Endereco cadastrarEndereco(Endereco endereco) throws EnderecoException, Exception {
-        if (!enderecoCol.validarEnderecoParaCadastro(endereco)) {
-            throw new EnderecoException("Dados de endereço inválidos ou incompletos para cadastro.");
+        if (endereco == null || !enderecoCol.validarCEP(endereco.getCep())) {
+            throw new EnderecoException("Informe um endereço com CEP válido.");
         }
 
         try (Connection conn = ConexaoBD.getConexao()) {
             conn.setAutoCommit(false);
             try {
                 CidadeDAO cidadeDAO = new CidadeDAO(conn);
-                if (cidadeDAO.selecionarPorId(endereco.getCidade().getIdCidade()) == null) {
+                EnderecoDAO enderecoDAO = new EnderecoDAO(conn);
+
+                if (!enderecoCol.validarEnderecoParaCadastro(endereco)) {
+                    resolverEnderecoPorNome(endereco, new UFDAO(conn), cidadeDAO, enderecoDAO);
+
+                    if (!enderecoCol.validarEnderecoParaCadastro(endereco)) {
+                        throw new EnderecoException("Não foi possível resolver os IDs do endereço.");
+                    }
+                } else if (cidadeDAO.selecionarPorId(endereco.getCidade().getIdCidade()) == null) {
                     throw new EnderecoException("Cidade informada não está cadastrada no banco.");
                 }
 
-                EnderecoDAO enderecoDAO = new EnderecoDAO(conn);
+
                 Endereco cadastrado = enderecoDAO.inserir(endereco);
                 conn.commit();
                 return cadastrado;
@@ -44,6 +53,61 @@ public class UCEnderecoGeralServicos {
                 throw new Exception("Erro de infraestrutura ao cadastrar endereço: " + e.getMessage(), e);
             }
         }
+    }
+    //Para cadastrar endereco
+    private void resolverEnderecoPorNome(
+            Endereco endereco, UFDAO ufDAO, CidadeDAO cidadeDAO, EnderecoDAO enderecoDAO
+    ) throws EnderecoException, SQLException {
+        Cidade entradaCidade = endereco.getCidade();
+        Bairro entradaBairro = endereco.getBairro();
+        Logradouro entradaRua = endereco.getLogradouro();
+
+        if (entradaCidade == null || entradaCidade.getUf() == null || entradaBairro == null
+                || entradaRua == null || entradaRua.getTipoLogradouro() == null) {
+            throw new EnderecoException("Informe UF, cidade, bairro e logradouro.");
+        }
+
+        String nomeCidade = nomeObrigatorio(entradaCidade.getCidade(), "Cidade");
+        String nomeBairro = nomeObrigatorio(entradaBairro.getBairro(), "Bairro");
+        String nomeTipo = nomeObrigatorio(
+                entradaRua.getTipoLogradouro().getTipoLogradouro(), "Tipo de logradouro");
+        String nomeRua = nomeObrigatorio(entradaRua.getLogradouro(), "Logradouro");
+
+        UF uf = ufDAO.selecionarPorSigla(entradaCidade.getUf().getUf());
+        if (uf == null) {
+            throw new EnderecoException("UF não cadastrada.");
+        }
+
+        Cidade cidade = cidadeDAO.selecionarPorNomeEUf(nomeCidade, uf.getIdUF());
+        if (cidade == null) {
+            cidade = cidadeDAO.inserir(nomeCidade, uf);
+        }
+
+        Bairro bairro = enderecoDAO.selecionarBairroPorNome(nomeBairro);
+        if (bairro == null) {
+            bairro = enderecoDAO.inserirBairro(nomeBairro);
+        }
+
+        TipoLogradouro tipo = enderecoDAO.selecionarTipoLogradouroPorNome(nomeTipo);
+        if (tipo == null) {
+            tipo = enderecoDAO.inserirTipoLogradouro(nomeTipo);
+        }
+
+        Logradouro rua = enderecoDAO.selecionarLogradouroPorNomeETipo(nomeRua, tipo);
+        if (rua == null) {
+            rua = enderecoDAO.inserirLogradouro(nomeRua, tipo);
+        }
+
+        endereco.setCidade(cidade);
+        endereco.setBairro(bairro);
+        endereco.setLogradouro(rua);
+    }
+
+    private String nomeObrigatorio(String valor, String campo) throws EnderecoException {
+        if (valor == null || valor.isBlank() || valor.trim().length() > 45) {
+            throw new EnderecoException(campo + " deve ter de 1 a 45 caracteres.");
+        }
+        return valor.trim();
     }
 
     // 2. obterEnderecoPorCEP
