@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { AlertTriangle, ArrowLeft } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, CheckCircle2, ShieldAlert } from 'lucide-react'
+import Button from '@/components/ui/Button'
 import DataGrid from '@/components/ui/DataGrid'
 import type { Column } from '@/components/ui/DataGrid'
 import StatusBadge from '@/components/ui/StatusBadge'
 import Tabs from '@/components/ui/Tabs'
 import { auditoriaService } from '@/services/auditoriaService'
+import { useAuthStore } from '@/store/useAuthStore'
+import { useDeclaracaoStore } from '@/store/useDeclaracaoStore'
 import type { Bem, Dependente, DeclaracaoAuditoria, Rendimento } from '@/types'
 import { patrimonioIncompativel, totais } from '@/utils/auditoria'
 import { formatBRL } from '@/utils/masks'
@@ -46,20 +49,55 @@ function Campo({ label, value }: { label: string; value: string }) {
 export default function Auditoria() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const usuario = useAuthStore((s) => s.usuario)
+  const showToast = useDeclaracaoStore((s) => s.showToast)
   const [decl, setDecl] = useState<DeclaracaoAuditoria | null>(null)
   const [erro, setErro] = useState('')
   const [aba, setAba] = useState<Aba>('dados')
+  const [salvandoStatus, setSalvandoStatus] = useState<'Processada' | 'Retida' | null>(null)
 
   useEffect(() => {
     let ativo = true
     setDecl(null)
     setErro('')
-    // Busca os dados completos da declaração selecionada na triagem.
     auditoriaService.obterDeclaracao(Number(id))
       .then((dados) => { if (ativo) setDecl(dados) })
       .catch((error: Error) => { if (ativo) setErro(error.message) })
     return () => { ativo = false }
   }, [id])
+
+  const decidirStatus = async (novoStatus: 'Processada' | 'Retida') => {
+    if (!decl || !usuario || salvandoStatus) return
+
+    const mensagemConfirmacao =
+      novoStatus === 'Processada'
+        ? 'Confirmar aprovação da declaração? Após processada, o status não poderá mais ser alterado.'
+        : 'Confirmar retenção desta declaração em Malha Fina?'
+
+    if (!window.confirm(mensagemConfirmacao)) return
+
+    try {
+      setSalvandoStatus(novoStatus)
+      const atualizada = await auditoriaService.atualizarStatus(
+        decl.idDeclaracao,
+        novoStatus,
+        usuario.idPessoa,
+      )
+      setDecl(atualizada)
+      showToast(
+        novoStatus === 'Processada'
+          ? 'Declaração aprovada e marcada como Processada!'
+          : 'Declaração retida em Malha Fina.',
+      )
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : 'Erro ao atualizar status da declaração.',
+        'error',
+      )
+    } finally {
+      setSalvandoStatus(null)
+    }
+  }
 
   if (erro) return <p role="alert" className="text-brand">{erro} <button className="underline" onClick={() => navigate('/auditor')}>Voltar</button></p>
   if (!decl || decl.idDeclaracao !== Number(id)) return <p className="text-brand">Carregando...</p>
@@ -155,14 +193,46 @@ export default function Auditoria() {
                 footer={`Anterior: ${formatBRL(t.totalBensAnterior)} → Atual: ${formatBRL(t.totalBens)}`} />
             </div>
           )}
-
         </div>
       </div>
 
-      {/* Alterações de status dependem de rotas que a API ainda não oferece. */}
-      <p className="mt-6 border-t border-brand/20 pt-3 text-sm text-neutral-600">
-        Aprovar ou reter declarações ainda não está disponível.
-      </p>
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-brand/20 pt-4">
+        {decl.status === 'Processada' ? (
+          <p className="flex items-center gap-2 text-sm font-medium text-emerald-700">
+            <CheckCircle2 className="h-4 w-4" />
+            Declaração já processada e finalizada pela auditoria fiscal.
+          </p>
+        ) : (
+          <>
+            <p className="text-sm text-neutral-600">
+              {decl.status === 'Retida'
+                ? 'Esta declaração está retida em malha fina e pode ser liberada após análise.'
+                : 'Defina o parecer fiscal para esta declaração:'}
+            </p>
+            <div className="flex flex-wrap gap-3">
+              {decl.status !== 'Retida' && (
+                <button
+                  type="button"
+                  disabled={salvandoStatus !== null}
+                  onClick={() => decidirStatus('Retida')}
+                  className="inline-flex items-center gap-2 rounded-lg border border-red-600 px-4 py-2 text-sm font-bold text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50"
+                >
+                  <ShieldAlert className="h-4 w-4" />
+                  {salvandoStatus === 'Retida' ? 'Retendo...' : 'Reter em Malha Fina'}
+                </button>
+              )}
+              <Button
+                type="button"
+                disabled={salvandoStatus !== null}
+                icon={<CheckCircle2 className="h-4 w-4" />}
+                onClick={() => decidirStatus('Processada')}
+              >
+                {salvandoStatus === 'Processada' ? 'Aprovando...' : 'Aprovar Declaração'}
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }

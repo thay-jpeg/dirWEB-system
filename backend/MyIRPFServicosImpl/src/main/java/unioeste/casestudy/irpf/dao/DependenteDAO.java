@@ -8,8 +8,8 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
-import unioeste.casestudy.irpf.bo.TipoDependencia;
 import unioeste.casestudy.irpf.bo.Dependente;
+import unioeste.casestudy.irpf.bo.TipoDependencia;
 
 public class DependenteDAO {
     private final Connection conexao;
@@ -97,5 +97,14 @@ public class DependenteDAO {
             }
         }
         return dep;
+    }
+
+        public boolean excluir(int idDependente, int idContribuinte) throws SQLException {
+        String sql = "DELETE FROM Dependente WHERE idDependente = ? AND Contribuinte_Pessoa_idPessoa = ?";
+        try (PreparedStatement stmt = conexao.prepareStatement(sql)) {
+            stmt.setInt(1, idDependente);
+            stmt.setInt(2, idContribuinte);
+            return stmt.executeUpdate() > 0;
+        }
     }
 }

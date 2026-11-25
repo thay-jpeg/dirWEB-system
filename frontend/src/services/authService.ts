@@ -1,26 +1,55 @@
 import type { SessaoUsuario } from '@/types'
-import type { CadastroForm } from '@/types/authSchemas'
 import { api } from './api'
 
+interface PerfilApi {
+  idPessoa: number
+  cpf: string
+  codAuditor: string | null
+  nome: string
+  sobrenome: string | null
+  perfilAcesso: string
+}
+
+interface ContribuinteCriadoApi {
+  idPessoa: number
+  cpf: string
+  nome: string
+  sobrenome?: string | null
+}
+
 export const authService = {
-  async autenticar(cpf: string, senha: string): Promise<SessaoUsuario> {
-    const { data } = await api.post<SessaoUsuario>('/irpf/login', {
-      cpf: cpf.replace(/\D/g, ''),
-      senha,
-    })
+  async identificar(identificador: string): Promise<SessaoUsuario> {
+    const valor = identificador.trim()
+    const { data } = await api.get<PerfilApi>(
+      `/irpf/identificar/${encodeURIComponent(valor)}`,
+    )
+
     if (data.perfilAcesso !== 'contribuinte' && data.perfilAcesso !== 'auditorFiscal') {
-      throw new Error('A conta está com um perfil de acesso inválido.')
+      throw new Error('Perfil de acesso inválido.')
     }
-    return data
+
+    return {
+      idPessoa: data.idPessoa,
+      loginCpf: data.cpf,
+      nome: data.nome,
+      sobrenome: data.sobrenome ?? '',
+      perfilAcesso: data.perfilAcesso,
+    }
   },
 
-  async cadastrarContribuinte({ cpf, nome, senha }: CadastroForm) {
-    const loginCpf = cpf.replace(/\D/g, '')
-    // O backend recebe a senha no campo senhaHash e calcula o hash no cadastro.
-    await api.post('/irpf/cadastrarContribuinte', {
-      loginCpf,
-      senhaHash: senha,
-      contribuinte: { nome, cpf: loginCpf },
+  async cadastrarContribuinte({ cpf, nome }: { cpf: string; nome: string }): Promise<SessaoUsuario> {
+    const cpfLimpo = cpf.replace(/\D/g, '')
+    const { data } = await api.post<ContribuinteCriadoApi>('/irpf/cadastrarContribuinte', {
+      nome: nome.trim(),
+      cpf: cpfLimpo,
     })
+
+    return {
+      idPessoa: data.idPessoa,
+      loginCpf: data.cpf,
+      nome: data.nome,
+      sobrenome: data.sobrenome ?? '',
+      perfilAcesso: 'contribuinte',
+    }
   },
 }

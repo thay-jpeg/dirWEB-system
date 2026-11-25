@@ -7,13 +7,14 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
-import unioeste.casestudy.irpf.bo.Contribuinte;
 import java.util.List;
-import unioeste.casestudy.irpf.bo.TipoBem;
-import unioeste.geral.pessoa.bo.PessoaJuridica;
+
 import unioeste.casestudy.irpf.bo.BemDireito;
+import unioeste.casestudy.irpf.bo.Contribuinte;
 import unioeste.casestudy.irpf.bo.DeclaracaoRenda;
 import unioeste.casestudy.irpf.bo.RendimentoPJ;
+import unioeste.casestudy.irpf.bo.TipoBem;
+import unioeste.geral.pessoa.bo.PessoaJuridica;
 
 public class DeclaracaoDAO {
     private final Connection conexao;
@@ -53,7 +54,8 @@ public class DeclaracaoDAO {
             }
         }
     }
-    //Cabeçalho = (dec,pessoa)
+
+    // Cabeçalho = (dec, pessoa)
     public DeclaracaoRenda buscarCabecalho(int idPessoa, int idDeclaracao)
             throws SQLException {
         String sql = """
@@ -84,11 +86,12 @@ public class DeclaracaoDAO {
     public List<DeclaracaoRenda> listarDeclaracoesParaAuditoria() throws SQLException {
         String sql = """
             SELECT d.idDeclaracao_Renda, d.anoExercicio, d.status,
-                   p.idPessoa, p.Nome, c.Sobrenome, c.CPF
+                   p.idPessoa, p.Nome, pf.Sobrenome, pf.CPF
             FROM Declaracao_Renda d
             JOIN Contribuinte c ON c.Pessoa_idPessoa = d.Contribuinte_Pessoa_idPessoa
-            JOIN Pessoa p ON p.idPessoa = c.Pessoa_idPessoa
-            WHERE d.status IN ('Enviada', 'Processada', 'Retida')
+            JOIN Pessoa_Fisica pf ON pf.Pessoa_idPessoa = c.Pessoa_idPessoa
+            JOIN Pessoa p ON p.idPessoa = pf.Pessoa_idPessoa
+            WHERE d.status IN ('Enviada', 'Processada', 'Retida', 'Retida em Malha Fina')
             ORDER BY d.idDeclaracao_Renda DESC
             """;
 
@@ -134,7 +137,8 @@ public class DeclaracaoDAO {
             rend.setIdDeclaracao(idDeclaracao);
         }
     }
-    //Lista dos rendimentos
+
+    // Lista dos rendimentos
     public List<RendimentoPJ> listarRendimentos(int idDeclaracao) throws SQLException {
         String sql = """
             SELECT r.idRendimentos, r.Valor_Total_Recebido, r.Valor_13_salario,
@@ -173,7 +177,8 @@ public class DeclaracaoDAO {
 
         return rendimentos;
     }
-    //Lista dos bens
+
+    // Lista dos bens
     public List<BemDireito> listarBens(int idPessoa, int idDeclaracao)
             throws SQLException {
         String sql = """
@@ -231,7 +236,7 @@ public class DeclaracaoDAO {
             stmt.setDouble(3, bem.getValorAtual());
             stmt.setInt(4, idContribuinte);
             stmt.setInt(5, idDeclaracao);
-            if (bem.getEndereco() != null) {
+            if (bem.getEndereco() != null && bem.getEndereco().getIdEndereco() > 0) {
                 stmt.setInt(6, bem.getEndereco().getIdEndereco());
             } else {
                 stmt.setNull(6, Types.INTEGER);
@@ -256,4 +261,45 @@ public class DeclaracaoDAO {
             }
         }
     }
+
+    public DeclaracaoRenda buscarCabecalhoPorId(int idDeclaracao) throws SQLException {
+    String sql = """
+        SELECT idDeclaracao_Renda, Contribuinte_Pessoa_idPessoa, anoExercicio, status
+        FROM Declaracao_Renda
+        WHERE idDeclaracao_Renda = ?
+        """;
+
+    try (PreparedStatement stmt = conexao.prepareStatement(sql)) {
+        stmt.setInt(1, idDeclaracao);
+        try (ResultSet rs = stmt.executeQuery()) {
+            if (!rs.next()) {
+                return null;
+            }
+            Contribuinte titular = new Contribuinte();
+            titular.setIdPessoa(rs.getInt("Contribuinte_Pessoa_idPessoa"));
+
+            DeclaracaoRenda declaracao = new DeclaracaoRenda();
+            declaracao.setIdDeclaracao(rs.getInt("idDeclaracao_Renda"));
+            declaracao.setAnoExercicio(rs.getInt("anoExercicio"));
+            declaracao.setStatus(rs.getString("status"));
+            declaracao.setContribuinte(titular);
+            return declaracao;
+        }
+    }
+}
+
+public boolean atualizarStatusAuditoria(int idDeclaracao, String novoStatus, int idAuditor) throws SQLException {
+    String sql = """
+        UPDATE Declaracao_Renda
+        SET status = ?, Auditor_Fiscal_Pessoa_idPessoa = ?
+        WHERE idDeclaracao_Renda = ?
+        """;
+
+    try (PreparedStatement stmt = conexao.prepareStatement(sql)) {
+        stmt.setString(1, novoStatus);
+        stmt.setInt(2, idAuditor);
+        stmt.setInt(3, idDeclaracao);
+        return stmt.executeUpdate() > 0;
+    }
+}
 }

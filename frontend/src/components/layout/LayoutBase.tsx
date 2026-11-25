@@ -5,7 +5,7 @@ import Sidebar from './Sidebar'
 import Footer from './Footer'
 import Toast from '@/components/ui/Toast'
 import Button from '@/components/ui/Button'
-import { declaracaoService } from '@/services/declaracaoService'
+import { declaracaoService, mapearBem, mapearRendimento } from '@/services/declaracaoService'
 import { useDeclaracaoStore } from '@/store/useDeclaracaoStore'
 import { useAuthStore } from '@/store/useAuthStore'
 
@@ -24,15 +24,28 @@ export default function LayoutBase() {
 
     let ativo = true
     setRecarregando(true)
-    // Uma falha de consulta fica visível e preserva a navegação entre as abas.
     Promise.allSettled([
       declaracaoService.carregarContribuinte(usuario.loginCpf),
       declaracaoService.listarDependentes(usuario.idPessoa),
-    ]).then(([perfil, dependentes]) => {
+      declaracaoService.consultarDeclaracaoAtual(usuario.idPessoa),
+    ]).then(([perfil, dependentes, declaracao]) => {
       if (!ativo) return
+      const dec = declaracao.status === 'fulfilled' ? declaracao.value : null
+      const jaEnviada = Boolean(dec && dec.status !== 'Em Preenchimento')
+      const listaDep = dependentes.status === 'fulfilled' ? dependentes.value : []
+
       useDeclaracaoStore.getState().hydrate({
         ...(perfil.status === 'fulfilled' ? { contribuinte: perfil.value } : {}),
-        ...(dependentes.status === 'fulfilled' ? { dependentes: dependentes.value } : {}),
+        ...(dependentes.status === 'fulfilled' ? { dependentes: listaDep } : {}),
+        ...(dec
+          ? {
+            idDeclaracao: dec.idDeclaracao,
+            rendimentos: (dec.rendimentos ?? []).map(mapearRendimento),
+            bens: (dec.bensDireitos ?? []).map(mapearBem),
+            enviada: jaEnviada,
+            semDependentes: jaEnviada && listaDep.length === 0,
+          }
+          : {}),
         erroContribuinte: perfil.status === 'rejected',
         erroDependentes: dependentes.status === 'rejected',
       })

@@ -51,4 +51,16 @@ export const auditoriaService = {
     if (!item) throw new Error('Declaração não encontrada na triagem.')
     return mapearDeclaracao(await declaracaoService.consultarDeclaracao(item.contribuinte.idPessoa, idDeclaracao))
   },
+
+  async atualizarStatus(
+    idDeclaracao: number,
+    status: Extract<StatusDeclaracao, 'Processada' | 'Retida'>,
+    idAuditor: number,
+  ): Promise<DeclaracaoAuditoria> {
+    const { data } = await api.put<DeclaracaoApi>(
+      `/irpf/auditoria/declaracoes/${idDeclaracao}/status`,
+      { status, idAuditor },
+    )
+    return mapearDeclaracao(data)
+  },
 }

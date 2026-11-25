@@ -62,7 +62,7 @@ WHERE brasil.idDDI IS NOT NULL
 
 COMMIT;
 
--- Conferência. Em um banco sem códigos extras, espere 206 e 67.
+-- Conferência. 206 e 67
 SELECT COUNT(DISTINCT REPLACE(TRIM(DDI), '+', '')) AS total_ddis
 FROM DDI;
 

@@ -167,33 +167,33 @@ export const declaracaoService = {
     const endereco = await resolverEndereco(form, atual.endereco)
     const emails = atual.emails.slice(1)
     if (form.Email.trim()) emails.unshift({ email: form.Email.trim() })
-      const numero = digitos(form.Telefone)
-const ddiDigitado = form.DDITelefone.trim()
+    const numero = digitos(form.Telefone)
+    const ddiDigitado = form.DDITelefone.trim()
 
-if (numero && !/^\+?[1-9]\d{0,2}$/.test(ddiDigitado)) {
-  throw new Error('Informe um DDI com 1 a 3 dígitos, como +55.')
-}
+    if (numero && !/^\+?[1-9]\d{0,2}$/.test(ddiDigitado)) {
+      throw new Error('Informe um DDI com 1 a 3 dígitos, como +55.')
+    }
 
-const codigoDdi = digitos(ddiDigitado)
-const telefoneAtual = atual.telefones[0]
-const numeroAtual = telefoneAtual
-  ? digitos((telefoneAtual.ddd?.ddd ?? '') + telefoneAtual.fone)
-  : ''
-const ddiAtual = digitos(telefoneAtual?.ddi?.ddi ?? '55')
-const alterouTelefone = numero !== '' &&
-  (numero !== numeroAtual || codigoDdi !== ddiAtual)
+    const codigoDdi = digitos(ddiDigitado)
+    const telefoneAtual = atual.telefones[0]
+    const numeroAtual = telefoneAtual
+      ? digitos((telefoneAtual.ddd?.ddd ?? '') + telefoneAtual.fone)
+      : ''
+    const ddiAtual = digitos(telefoneAtual?.ddi?.ddi ?? '55')
+    const alterouTelefone = numero !== '' &&
+      (numero !== numeroAtual || codigoDdi !== ddiAtual)
 
-if (alterouTelefone && !/^\d{10,11}$/.test(numero)) {
-  throw new Error('Informe o DDD e um telefone com 8 ou 9 dígitos.')
-}
+    if (alterouTelefone && !/^\d{10,11}$/.test(numero)) {
+      throw new Error('Informe o DDD e um telefone com 8 ou 9 dígitos.')
+    }
 
-const telefones = alterouTelefone
-  ? [{
-      fone: numero.slice(2),
-      ddd: { ddd: numero.slice(0, 2) },
-      ddi: { ddi: codigoDdi },
-    }, ...atual.telefones.slice(1)]
-  : atual.telefones
+    const telefones = alterouTelefone
+      ? [{
+        fone: numero.slice(2),
+        ddd: { ddd: numero.slice(0, 2) },
+        ddi: { ddi: codigoDdi },
+      }, ...atual.telefones.slice(1)]
+      : atual.telefones
 
     const { data } = await api.put<ContribuinteApi>('/irpf/atualizarDadosContribuinte', {
       idPessoa: usuario.idPessoa,
@@ -279,5 +279,15 @@ const telefones = alterouTelefone
       })),
     })
     return data.idDeclaracao
+  },
+
+  async excluirDependente(idPessoa: number, idDependente: number): Promise<void> {
+    await api.delete(`/irpf/contribuintes/${idPessoa}/dependentes/${idDependente}`)
+  },
+
+  async consultarDeclaracaoAtual(idPessoa: number): Promise<DeclaracaoApi | null> {
+    const response = await api.get<DeclaracaoApi>(`/irpf/contribuintes/${idPessoa}/declaracao-atual`)
+    if (response.status === 204 || !response.data) return null
+    return response.data
   },
 }

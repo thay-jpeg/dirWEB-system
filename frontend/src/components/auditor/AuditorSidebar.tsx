@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { ClipboardList, LogOut, UserCog } from 'lucide-react'
+import { ClipboardList, LogOut } from 'lucide-react'
 import { useSair } from '@/hooks'
 
 const row = 'flex items-center gap-4 rounded-lg px-5 py-3.5 text-[0.9375rem] transition-colors'
@@ -15,9 +15,6 @@ export default function AuditorSidebar() {
       <nav className="flex flex-col gap-1">
         <NavLink to="/auditor" className={cls(triagemAtiva)}>
           <ClipboardList className="h-5 w-5 shrink-0" /> Triagem de Declarações
-        </NavLink>
-        <NavLink to="/auditor/acessos" className={({ isActive }) => cls(isActive)}>
-          <UserCog className="h-5 w-5 shrink-0" /> Gestão de Acessos
         </NavLink>
       </nav>
       <div className="mx-4 my-3 mt-auto h-1 rounded-full bg-[#dde1f4]" />

@@ -11,6 +11,7 @@ public class DeclaracaoRenda implements Serializable {
     private Integer anoExercicio;
     private String status; // "Em Preenchimento", "Enviada", "Processada", "Retida em Malha Fina"
     private Contribuinte contribuinte;
+    private AuditorFiscal auditorFiscal;
     private List<Dependente> dependentes = new ArrayList<>();
     private List<RendimentoPJ> rendimentos = new ArrayList<>();
     private List<BemDireito> bensDireitos = new ArrayList<>();
@@ -28,6 +29,9 @@ public class DeclaracaoRenda implements Serializable {
 
     public Contribuinte getContribuinte() { return contribuinte; }
     public void setContribuinte(Contribuinte contribuinte) { this.contribuinte = contribuinte; }
+
+    public AuditorFiscal getAuditorFiscal() { return auditorFiscal; }
+    public void setAuditorFiscal(AuditorFiscal auditorFiscal) { this.auditorFiscal = auditorFiscal; }
 
     public List<Dependente> getDependentes() { return dependentes; }
     public void setDependentes(List<Dependente> dependentes) { this.dependentes = dependentes; }

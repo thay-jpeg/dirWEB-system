@@ -4,10 +4,10 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 
 import unioeste.casestudy.irpf.bo.Contribuinte;
-import unioeste.casestudy.irpf.bo.UsuarioAcesso;
+import unioeste.geral.endereco.bo.Endereco;
+import unioeste.geral.pessoa.bo.PessoaFisica;
 
 public class ContribuinteDAO {
     private final Connection conexao;
@@ -16,83 +16,81 @@ public class ContribuinteDAO {
         this.conexao = conexao;
     }
 
-    public void inserirContribuinte(Contribuinte c) throws SQLException {
-        String sql = "INSERT INTO Contribuinte (Pessoa_idPessoa, Sobrenome, Nome_Social, CPF, RG, Sexo) " +
+    public void inserirPessoaFisica(PessoaFisica pf) throws SQLException {
+        String sql = "INSERT INTO Pessoa_Fisica (Pessoa_idPessoa, Sobrenome, Nome_Social, CPF, RG, Sexo) " +
                      "VALUES (?, ?, ?, ?, ?, ?)";
         try (PreparedStatement stmt = conexao.prepareStatement(sql)) {
-            stmt.setInt(1, c.getIdPessoa());
-            stmt.setString(2, c.getSobrenome());
-            stmt.setString(3, c.getNomeSocial());
-            stmt.setString(4, c.getCpf());
-            stmt.setString(5, c.getRg());
-            stmt.setString(6, c.getSexo());
+            stmt.setInt(1, pf.getIdPessoa());
+            stmt.setString(2, pf.getSobrenome());
+            stmt.setString(3, pf.getNomeSocial());
+            stmt.setString(4, pf.getCpf());
+            stmt.setString(5, pf.getRg());
+            stmt.setString(6, pf.getSexo());
             stmt.executeUpdate();
         }
     }
 
-    public void atualizarContribuinte(Contribuinte c) throws SQLException {
-        String sql = "UPDATE Contribuinte SET Sobrenome = ?, Nome_Social = ?, RG = ?, Sexo = ? " +
+    public void inserirContribuinte(int idPessoa) throws SQLException {
+        String sql = "INSERT INTO Contribuinte (Pessoa_idPessoa) VALUES (?)";
+        try (PreparedStatement stmt = conexao.prepareStatement(sql)) {
+            stmt.setInt(1, idPessoa);
+            stmt.executeUpdate();
+        }
+    }
+
+    public void atualizarPessoaFisica(PessoaFisica pf) throws SQLException {
+        String sql = "UPDATE Pessoa_Fisica SET Sobrenome = ?, Nome_Social = ?, RG = ?, Sexo = ? " +
                      "WHERE Pessoa_idPessoa = ?";
         try (PreparedStatement stmt = conexao.prepareStatement(sql)) {
-            stmt.setString(1, c.getSobrenome());
-            stmt.setString(2, c.getNomeSocial());
-            stmt.setString(3, c.getRg());
-            stmt.setString(4, c.getSexo());
-            stmt.setInt(5, c.getIdPessoa());
+            stmt.setString(1, pf.getSobrenome());
+            stmt.setString(2, pf.getNomeSocial());
+            stmt.setString(3, pf.getRg());
+            stmt.setString(4, pf.getSexo());
+            stmt.setInt(5, pf.getIdPessoa());
             stmt.executeUpdate();
         }
     }
 
-    public void inserirUsuarioAcesso(UsuarioAcesso usuario) throws SQLException {
-        String sql = "INSERT INTO UsuarioAcesso (loginCpf, senhaHash, perfilAcesso, Contribuinte_Pessoa_idPessoa) " +
-                     "VALUES (?, ?, ?, ?)";
-        try (PreparedStatement stmt = conexao.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            stmt.setString(1, usuario.getLoginCpf());
-            stmt.setString(2, usuario.getSenhaHash());
-            stmt.setString(3, usuario.getPerfilAcesso());
-            stmt.setInt(4, usuario.getContribuinte().getIdPessoa());
-            stmt.executeUpdate();
-            try (ResultSet keys = stmt.getGeneratedKeys()) {
-                if (keys.next()) usuario.setIdUsuarioAcesso(keys.getInt(1));
-            }
-        }
-    }
-
-    public UsuarioAcesso buscarUsuarioPorCpf(String cpf) throws SQLException {
+    public Contribuinte buscarPorId(int idPessoa) throws SQLException {
         String sql = """
-            SELECT u.loginCpf, u.senhaHash, u.perfilAcesso,
-                   p.idPessoa, p.Nome, c.Sobrenome
-            FROM UsuarioAcesso u
-            JOIN Contribuinte c ON c.Pessoa_idPessoa = u.Contribuinte_Pessoa_idPessoa
-            JOIN Pessoa p ON p.idPessoa = c.Pessoa_idPessoa
-            WHERE u.loginCpf = ?
+            SELECT p.idPessoa, p.Nome, p.Endereco_idEndereco,
+                   pf.Sobrenome, pf.Nome_Social, pf.CPF, pf.RG, pf.Sexo
+            FROM Contribuinte c
+            INNER JOIN Pessoa_Fisica pf ON pf.Pessoa_idPessoa = c.Pessoa_idPessoa
+            INNER JOIN Pessoa p ON p.idPessoa = pf.Pessoa_idPessoa
+            WHERE c.Pessoa_idPessoa = ?
             """;
 
         try (PreparedStatement stmt = conexao.prepareStatement(sql)) {
-            stmt.setString(1, cpf);
-
+            stmt.setInt(1, idPessoa);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (!rs.next()) {
                     return null;
                 }
 
-                Contribuinte contribuinte = new Contribuinte();
-                contribuinte.setIdPessoa(rs.getInt("idPessoa"));
-                contribuinte.setNome(rs.getString("Nome"));
-                contribuinte.setSobrenome(rs.getString("Sobrenome"));
+                Contribuinte c = new Contribuinte();
+                c.setIdPessoa(rs.getInt("idPessoa"));
+                c.setNome(rs.getString("Nome"));
+                c.setSobrenome(rs.getString("Sobrenome"));
+                c.setNomeSocial(rs.getString("Nome_Social"));
+                c.setCpf(rs.getString("CPF"));
+                c.setRg(rs.getString("RG"));
+                c.setSexo(rs.getString("Sexo"));
 
-                UsuarioAcesso usuario = new UsuarioAcesso();
-                usuario.setLoginCpf(rs.getString("loginCpf"));
-                usuario.setSenhaHash(rs.getString("senhaHash"));
-                usuario.setPerfilAcesso(rs.getString("perfilAcesso"));
-                usuario.setContribuinte(contribuinte);
-                return usuario;
+                Integer idEndereco = rs.getObject("Endereco_idEndereco", Integer.class);
+                if (idEndereco != null) {
+                    Endereco endereco = new Endereco();
+                    endereco.setIdEndereco(idEndereco);
+                    c.setEndereco(endereco);
+                }
+
+                return c;
             }
         }
     }
 
-    public Integer buscarIdPorCpf(String cpfLimpo) throws SQLException {
-        String sql = "SELECT Pessoa_idPessoa FROM Contribuinte WHERE CPF = ?";
+    public Integer buscarIdPessoaFisicaPorCpf(String cpfLimpo) throws SQLException {
+        String sql = "SELECT Pessoa_idPessoa FROM Pessoa_Fisica WHERE CPF = ?";
         try (PreparedStatement stmt = conexao.prepareStatement(sql)) {
             stmt.setString(1, cpfLimpo);
             try (ResultSet rs = stmt.executeQuery()) {
@@ -101,32 +99,15 @@ public class ContribuinteDAO {
         }
     }
 
-    public Contribuinte buscarPorId(int idPessoa) throws SQLException {
-        String sql = """
-            SELECT p.idPessoa, p.Nome, c.Sobrenome, c.Nome_Social,
-                   c.CPF, c.RG, c.Sexo
-            FROM Contribuinte c
-            JOIN Pessoa p ON p.idPessoa = c.Pessoa_idPessoa
-            WHERE p.idPessoa = ?
-            """;
-
+    public Integer buscarIdPorCpf(String cpfLimpo) throws SQLException {
+        String sql = "SELECT c.Pessoa_idPessoa " +
+                     "FROM Contribuinte c " +
+                     "INNER JOIN Pessoa_Fisica pf ON c.Pessoa_idPessoa = pf.Pessoa_idPessoa " +
+                     "WHERE pf.CPF = ?";
         try (PreparedStatement stmt = conexao.prepareStatement(sql)) {
-            stmt.setInt(1, idPessoa);
-
+            stmt.setString(1, cpfLimpo);
             try (ResultSet rs = stmt.executeQuery()) {
-                if (!rs.next()) {
-                    return null;
-                }
-
-                Contribuinte contribuinte = new Contribuinte();
-                contribuinte.setIdPessoa(rs.getInt("idPessoa"));
-                contribuinte.setNome(rs.getString("Nome"));
-                contribuinte.setSobrenome(rs.getString("Sobrenome"));
-                contribuinte.setNomeSocial(rs.getString("Nome_Social"));
-                contribuinte.setCpf(rs.getString("CPF"));
-                contribuinte.setRg(rs.getString("RG"));
-                contribuinte.setSexo(rs.getString("Sexo"));
-                return contribuinte;
+                return rs.next() ? rs.getInt("Pessoa_idPessoa") : null;
             }
         }
     }

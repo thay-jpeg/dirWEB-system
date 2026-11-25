@@ -146,6 +146,26 @@ CREATE TABLE IF NOT EXISTS `mydb`.`Pessoa` (
     ON UPDATE NO ACTION)
 ENGINE = InnoDB;
 
+-- -----------------------------------------------------
+-- Table `mydb`.`Pessoa_Fisica`
+-- -----------------------------------------------------
+DROP TABLE IF EXISTS `mydb`.`Pessoa_Fisica` ;
+
+CREATE TABLE IF NOT EXISTS `mydb`.`Pessoa_Fisica` (
+  `Pessoa_idPessoa` INT NOT NULL,
+  `Sobrenome` VARCHAR(45) NULL,
+  `Nome_Social` VARCHAR(45) NULL,
+  `CPF` VARCHAR(45) NOT NULL,
+  `RG` VARCHAR(45) NULL,
+  `Sexo` VARCHAR(45) NULL,
+  PRIMARY KEY (`Pessoa_idPessoa`),
+  UNIQUE INDEX `CPF_UNIQUE` (`CPF` ASC) VISIBLE,
+  CONSTRAINT `fk_Pessoa_Fisica_Pessoa1`
+    FOREIGN KEY (`Pessoa_idPessoa`)
+    REFERENCES `mydb`.`Pessoa` (`idPessoa`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION)
+ENGINE = InnoDB;
 
 -- -----------------------------------------------------
 -- Table `mydb`.`Contribuinte`
@@ -154,20 +174,30 @@ DROP TABLE IF EXISTS `mydb`.`Contribuinte` ;
 
 CREATE TABLE IF NOT EXISTS `mydb`.`Contribuinte` (
   `Pessoa_idPessoa` INT NOT NULL,
-  `Sobrenome` VARCHAR(45) NULL,
-  `Nome_Social` VARCHAR(45) NULL,
-  `CPF` VARCHAR(45) NULL,
-  `RG` VARCHAR(45) NULL,
-  `Sexo` VARCHAR(45) NULL,
   PRIMARY KEY (`Pessoa_idPessoa`),
-  INDEX `fk_Pessoa_Fisica_Pessoa1_idx` (`Pessoa_idPessoa` ASC) VISIBLE,
-  CONSTRAINT `fk_Pessoa_Fisica_Pessoa1`
+  CONSTRAINT `fk_Contribuinte_Pessoa_Fisica1`
     FOREIGN KEY (`Pessoa_idPessoa`)
-    REFERENCES `mydb`.`Pessoa` (`idPessoa`)
+    REFERENCES `mydb`.`Pessoa_Fisica` (`Pessoa_idPessoa`)
     ON DELETE NO ACTION
     ON UPDATE NO ACTION)
 ENGINE = InnoDB;
 
+-- -----------------------------------------------------
+-- Table `mydb`.`Auditor_Fiscal`
+-- -----------------------------------------------------
+DROP TABLE IF EXISTS `mydb`.`Auditor_Fiscal` ;
+
+CREATE TABLE IF NOT EXISTS `mydb`.`Auditor_Fiscal` (
+  `Pessoa_idPessoa` INT NOT NULL,
+  `codAuditor` VARCHAR(45) NOT NULL,
+  PRIMARY KEY (`Pessoa_idPessoa`),
+  UNIQUE INDEX `codAuditor_UNIQUE` (`codAuditor` ASC) VISIBLE,
+  CONSTRAINT `fk_Auditor_Fiscal_Pessoa_Fisica1`
+    FOREIGN KEY (`Pessoa_idPessoa`)
+    REFERENCES `mydb`.`Pessoa_Fisica` (`Pessoa_idPessoa`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION)
+ENGINE = InnoDB;
 
 -- -----------------------------------------------------
 -- Table `mydb`.`DDI`
@@ -293,17 +323,23 @@ DROP TABLE IF EXISTS `mydb`.`Declaracao_Renda` ;
 CREATE TABLE IF NOT EXISTS `mydb`.`Declaracao_Renda` (
   `idDeclaracao_Renda` INT NOT NULL AUTO_INCREMENT,
   `Contribuinte_Pessoa_idPessoa` INT NOT NULL,
+  `Auditor_Fiscal_Pessoa_idPessoa` INT NULL,
   `anoExercicio` INT NOT NULL,
   `status` VARCHAR(45) NULL,
   PRIMARY KEY (`idDeclaracao_Renda`),
-  INDEX `fk_Declaracao_Renda_Pessoa_Fisica1_idx` (`Contribuinte_Pessoa_idPessoa` ASC) VISIBLE,
-  CONSTRAINT `fk_Declaracao_Renda_Pessoa_Fisica1`
+  INDEX `fk_Declaracao_Renda_Contribuinte1_idx` (`Contribuinte_Pessoa_idPessoa` ASC) VISIBLE,
+  INDEX `fk_Declaracao_Renda_Auditor1_idx` (`Auditor_Fiscal_Pessoa_idPessoa` ASC) VISIBLE,
+  CONSTRAINT `fk_Declaracao_Renda_Contribuinte1`
     FOREIGN KEY (`Contribuinte_Pessoa_idPessoa`)
     REFERENCES `mydb`.`Contribuinte` (`Pessoa_idPessoa`)
     ON DELETE NO ACTION
+    ON UPDATE NO ACTION,
+  CONSTRAINT `fk_Declaracao_Renda_Auditor1`
+    FOREIGN KEY (`Auditor_Fiscal_Pessoa_idPessoa`)
+    REFERENCES `mydb`.`Auditor_Fiscal` (`Pessoa_idPessoa`)
+    ON DELETE NO ACTION
     ON UPDATE NO ACTION)
 ENGINE = InnoDB;
-
 
 -- -----------------------------------------------------
 -- Table `mydb`.`Pessoa_Juridica`
@@ -403,28 +439,6 @@ CREATE TABLE IF NOT EXISTS `mydb`.`Tipo_Bem` (
     ON DELETE NO ACTION
     ON UPDATE NO ACTION)
 ENGINE = InnoDB;
-
-
--- -----------------------------------------------------
--- Table `mydb`.`UsuarioAcesso`
--- -----------------------------------------------------
-DROP TABLE IF EXISTS `mydb`.`UsuarioAcesso` ;
-
-CREATE TABLE IF NOT EXISTS `mydb`.`UsuarioAcesso` (
-  `idUsuarioAcesso` INT NOT NULL AUTO_INCREMENT,
-  `loginCpf` VARCHAR(45) NULL,
-  `senhaHash` VARCHAR(255) NULL,
-  `perfilAcesso` VARCHAR(45) NULL,
-  `Contribuinte_Pessoa_idPessoa` INT NOT NULL,
-  PRIMARY KEY (`idUsuarioAcesso`),
-  INDEX `fk_UsuarioAcesso_Contribuinte1_idx` (`Contribuinte_Pessoa_idPessoa` ASC) VISIBLE,
-  CONSTRAINT `fk_UsuarioAcesso_Contribuinte1`
-    FOREIGN KEY (`Contribuinte_Pessoa_idPessoa`)
-    REFERENCES `mydb`.`Contribuinte` (`Pessoa_idPessoa`)
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION)
-ENGINE = InnoDB;
-
 
 SET SQL_MODE=@OLD_SQL_MODE;
 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;

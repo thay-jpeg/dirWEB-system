@@ -1,169 +1,199 @@
 package unioeste.casestudy.irpf.api;
 
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import unioeste.casestudy.irpf.bo.AuditorFiscal;
 import unioeste.casestudy.irpf.bo.BemDireito;
 import unioeste.casestudy.irpf.bo.Contribuinte;
 import unioeste.casestudy.irpf.bo.DeclaracaoRenda;
 import unioeste.casestudy.irpf.bo.Dependente;
-import unioeste.casestudy.irpf.bo.UsuarioAcesso;
-import unioeste.casestudy.irpf.manager.IRPFException;
-import unioeste.casestudy.irpf.manager.UCIRPFServicos;
-import unioeste.geral.pessoa.bo.PessoaJuridica;
-import java.sql.SQLException;
-import org.springframework.web.bind.annotation.GetMapping;
 import unioeste.casestudy.irpf.bo.TipoDependencia;
-import org.springframework.web.bind.annotation.PathVariable;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
+import unioeste.casestudy.irpf.manager.IRPFException;
+import unioeste.casestudy.irpf.manager.UCAuditorFiscalServicos;
+import unioeste.casestudy.irpf.manager.UCContribuinteServicos;
+import unioeste.casestudy.irpf.manager.UCDeclaracaoServicos;
+import unioeste.casestudy.irpf.manager.UCDependenteServicos;
+import unioeste.casestudy.irpf.manager.UCPessoaJuridicaServicos;
+import unioeste.geral.pessoa.bo.PessoaJuridica;
 
 @RestController
 @RequestMapping("/api/irpf")
 @CrossOrigin(origins = "*")
 public class IRPFController {
 
-    private final UCIRPFServicos servicos = new UCIRPFServicos();
+    private final UCContribuinteServicos contribuinteServicos = new UCContribuinteServicos();
+    private final UCDependenteServicos dependenteServicos = new UCDependenteServicos();
+    private final UCPessoaJuridicaServicos pessoaJuridicaServicos = new UCPessoaJuridicaServicos();
+    private final UCDeclaracaoServicos declaracaoServicos = new UCDeclaracaoServicos();
+    private final UCAuditorFiscalServicos auditorServicos = new UCAuditorFiscalServicos();
 
-    public record LoginEntrada(String cpf, String senha) {}
+    public record PerfilSaida(
+            int idPessoa, String cpf, String codAuditor,
+            String nome, String sobrenome, String perfilAcesso) {}
 
-    public record LoginSaida(
-            int idPessoa, String loginCpf, String nome,
-            String sobrenome, String perfilAcesso) {}
+    public record DecisaoAuditoriaEntrada(String status, int idAuditor) {}
 
-    // Cadastro inicial do contribuinte (gov.br)
-    @PostMapping("/cadastrarContribuinte")
-    public ResponseEntity<?> cadastrarContribuinte(@RequestBody UsuarioAcesso usuario) throws Exception {
-        return ResponseEntity.status(HttpStatus.CREATED).body(servicos.cadastrarContribuinte(usuario));
-    }
-    //Login do usuário
-    @PostMapping("/login")
-    public ResponseEntity<?> login(
-            @RequestBody LoginEntrada entrada, HttpServletRequest request)
+    // Identifica perfil c codAuditor ou CPF
+    @GetMapping("/identificar/{identificador}")
+    public ResponseEntity<?> identificarPerfil(@PathVariable("identificador") String identificador)
             throws SQLException {
-        UsuarioAcesso usuario = servicos.autenticar(entrada.cpf(), entrada.senha());
-
-        if (usuario == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("mensagem", "CPF ou senha inválidos."));
+        AuditorFiscal auditor = auditorServicos.buscarAuditorPorCodigoOuCpf(identificador);
+        if (auditor != null) {
+            return ResponseEntity.ok(new PerfilSaida(
+                    auditor.getIdPessoa(),
+                    auditor.getCpf(),
+                    auditor.getCodAuditor(),
+                    auditor.getNome(),
+                    auditor.getSobrenome(),
+                    "auditorFiscal"));
         }
 
-        HttpSession sessaoAnterior = request.getSession(false);
-        if (sessaoAnterior != null) {
-            sessaoAnterior.invalidate();
+        try {
+            Contribuinte contribuinte = contribuinteServicos.consultarContribuinte(identificador);
+            return ResponseEntity.ok(new PerfilSaida(
+                    contribuinte.getIdPessoa(),
+                    contribuinte.getCpf(),
+                    null,
+                    contribuinte.getNome(),
+                    contribuinte.getSobrenome(),
+                    "contribuinte"));
+        } catch (IRPFException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("mensagem", "CPF ou código de auditor não encontrado."));
         }
-
-        Contribuinte pessoa = usuario.getContribuinte();
-        HttpSession sessao = request.getSession();
-        sessao.setAttribute("idPessoa", pessoa.getIdPessoa());
-        sessao.setAttribute("perfilAcesso", usuario.getPerfilAcesso());
-
-        return ResponseEntity.ok(new LoginSaida(
-                pessoa.getIdPessoa(),
-                usuario.getLoginCpf(),
-                pessoa.getNome(),
-                pessoa.getSobrenome(),
-                usuario.getPerfilAcesso()));
     }
 
-    // Att de dados pessoais
+    // Contribuinte
+
+    @PostMapping("/cadastrarContribuinte")
+    public ResponseEntity<?> cadastrarContribuinte(@RequestBody Contribuinte contribuinte) throws Exception {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(contribuinteServicos.cadastrarContribuinte(contribuinte));
+    }
+
     @PutMapping("/atualizarDadosContribuinte")
     public ResponseEntity<?> atualizarDadosContribuinte(@RequestBody Contribuinte contribuinte) throws Exception {
-        return ResponseEntity.ok(servicos.atualizarDadosContribuinte(contribuinte));
+        return ResponseEntity.ok(contribuinteServicos.atualizarDadosContribuinte(contribuinte));
     }
 
-    // Cadastro de dependente
-    @PostMapping("/cadastrarDependente")
-    public ResponseEntity<?> cadastrarDependente(@RequestBody Dependente dependente) throws Exception {
-        return ResponseEntity.status(HttpStatus.CREATED).body(servicos.cadastrarDependente(dependente));
-    }
-    //Lista de dependentes
-    @GetMapping("/listarTiposDependencia")
-    public ResponseEntity<List<TipoDependencia>> listarTiposDependencia() throws SQLException {
-        List<TipoDependencia> tipos = servicos.listarTiposDependencia();
-        return ResponseEntity.ok(tipos);
-    }
-    //Lista os dependentes de um contribuinte
-    @GetMapping("/contribuintes/{idPessoa}/dependentes")
-    public ResponseEntity<List<Dependente>> listarDependentes(
-            @PathVariable("idPessoa") int idPessoa) throws IRPFException, SQLException {
-        return ResponseEntity.ok(servicos.listarDependentes(idPessoa));
-    }
-    //Consulta contribuinte por CPF
     @GetMapping("/contribuintes/cpf/{cpf}")
     public ResponseEntity<Contribuinte> consultarContribuinte(
             @PathVariable("cpf") String cpf) throws IRPFException, SQLException {
-        return ResponseEntity.ok(servicos.consultarContribuinte(cpf));
+        return ResponseEntity.ok(contribuinteServicos.consultarContribuinte(cpf));
     }
-    //Consulta fonte pagadora
+
+    // Dependentes
+
+    @PostMapping("/cadastrarDependente")
+    public ResponseEntity<?> cadastrarDependente(@RequestBody Dependente dependente) throws Exception {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(dependenteServicos.cadastrarDependente(dependente));
+    }
+
+    @DeleteMapping("/contribuintes/{idPessoa}/dependentes/{idDependente}")
+    public ResponseEntity<Void> excluirDependente(
+            @PathVariable("idPessoa") int idPessoa,
+            @PathVariable("idDependente") int idDependente) throws IRPFException, SQLException {
+        dependenteServicos.excluirDependente(idPessoa, idDependente);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/listarTiposDependencia")
+    public ResponseEntity<List<TipoDependencia>> listarTiposDependencia() throws SQLException {
+        return ResponseEntity.ok(dependenteServicos.listarTiposDependencia());
+    }
+
+    @GetMapping("/contribuintes/{idPessoa}/dependentes")
+    public ResponseEntity<List<Dependente>> listarDependentes(
+            @PathVariable("idPessoa") int idPessoa) throws IRPFException, SQLException {
+        return ResponseEntity.ok(dependenteServicos.listarDependentes(idPessoa));
+    }
+
+    // Pessoa Jurídica/Fonte Pagadora
+
+    @PostMapping("/cadastrarPessoaJuridica")
+    public ResponseEntity<?> cadastrarPessoaJuridica(@RequestBody PessoaJuridica pj) throws Exception {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(pessoaJuridicaServicos.cadastrarPessoaJuridica(pj));
+    }
+
     @GetMapping("/fontes-pagadoras/{cnpj}")
     public ResponseEntity<PessoaJuridica> consultarFontePagadora(
             @PathVariable("cnpj") String cnpj) throws IRPFException, SQLException {
-        return ResponseEntity.ok(servicos.consultarFontePagadora(cnpj));
+        return ResponseEntity.ok(pessoaJuridicaServicos.consultarFontePagadora(cnpj));
     }
-    //Consulta Dec
+
+    // Declaração e Bens
+
+    @PostMapping("/registrarBens")
+    public ResponseEntity<?> registrarBens(@RequestBody List<BemDireito> bens) throws Exception {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(declaracaoServicos.registrarBens(bens));
+    }
+
     @GetMapping("/contribuintes/{idPessoa}/declaracoes/{idDeclaracao}/bens")
     public ResponseEntity<List<BemDireito>> listarBens(
             @PathVariable("idPessoa") int idPessoa,
             @PathVariable("idDeclaracao") int idDeclaracao)
             throws IRPFException, SQLException {
-        List<BemDireito> bens = servicos.listarBens(idPessoa, idDeclaracao);
-        return ResponseEntity.ok(bens);
+        return ResponseEntity.ok(declaracaoServicos.listarBens(idPessoa, idDeclaracao));
     }
-    //Consulta Geral Dec
+
     @GetMapping("/contribuintes/{idPessoa}/declaracoes/{idDeclaracao}")
     public ResponseEntity<DeclaracaoRenda> consultarDeclaracao(
             @PathVariable("idPessoa") int idPessoa,
             @PathVariable("idDeclaracao") int idDeclaracao)
             throws IRPFException, SQLException {
-        return ResponseEntity.ok(servicos.consultarDeclaracao(idPessoa, idDeclaracao));
+        return ResponseEntity.ok(declaracaoServicos.consultarDeclaracao(idPessoa, idDeclaracao));
     }
 
-    // Cadastro de Pessoa Juridica/Fonte Pagadora
-    @PostMapping("/cadastrarPessoaJuridica")
-    public ResponseEntity<?> cadastrarPessoaJuridica(@RequestBody PessoaJuridica pj) throws Exception {
-        return ResponseEntity.status(HttpStatus.CREATED).body(servicos.cadastrarPessoaJuridica(pj));
+    @GetMapping("/contribuintes/{idPessoa}/declaracao-atual")
+    public ResponseEntity<DeclaracaoRenda> consultarDeclaracaoAtual(
+            @PathVariable("idPessoa") int idPessoa) throws IRPFException, SQLException {
+        DeclaracaoRenda declaracao = declaracaoServicos.consultarUltimaDeclaracao(idPessoa, 2026);
+        if (declaracao == null) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(declaracao);
     }
 
-    // Registro de Bens
-    @PostMapping("/registrarBens")
-    public ResponseEntity<?> registrarBens(@RequestBody List<BemDireito> bens) throws Exception {
-        return ResponseEntity.status(HttpStatus.CREATED).body(servicos.registrarBens(bens));
-    }
-
-    // Cadastro completo da DIRPF
     @PostMapping("/cadastrarDeclaracaoRenda")
     public ResponseEntity<?> cadastrarDeclaracaoRenda(@RequestBody DeclaracaoRenda declaracao) throws Exception {
-        return ResponseEntity.status(HttpStatus.CREATED).body(servicos.cadastrarDeclaracaoRenda(declaracao));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(declaracaoServicos.cadastrarDeclaracaoRenda(declaracao));
     }
+
+    // Auditoria Fiscal
 
     @GetMapping("/auditoria/declaracoes")
-    public ResponseEntity<?> listarDeclaracoesParaAuditoria(HttpServletRequest request)
-            throws SQLException {
-        HttpSession sessao = request.getSession(false);
-
-        if (sessao == null || sessao.getAttribute("idPessoa") == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("mensagem", "Faça login para acessar a auditoria."));
-        }
-
-        if (!"auditorFiscal".equals(sessao.getAttribute("perfilAcesso"))) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("mensagem", "Acesso restrito ao auditor fiscal."));
-        }
-
-        return ResponseEntity.ok(servicos.listarDeclaracoesParaAuditoria());
+    public ResponseEntity<List<DeclaracaoRenda>> listarDeclaracoesParaAuditoria() throws SQLException {
+        return ResponseEntity.ok(auditorServicos.listarDeclaracoesParaAuditoria());
     }
+
+    @PutMapping("/auditoria/declaracoes/{idDeclaracao}/status")
+    public ResponseEntity<DeclaracaoRenda> atualizarStatusAuditoria(
+            @PathVariable("idDeclaracao") int idDeclaracao,
+            @RequestBody DecisaoAuditoriaEntrada entrada) throws IRPFException, SQLException {
+        return ResponseEntity.ok(
+                auditorServicos.atualizarStatusAuditoria(idDeclaracao, entrada.status(), entrada.idAuditor()));
+    }
+
+    // Exceções
 
     @ExceptionHandler(IRPFException.class)
     public ResponseEntity<?> handleValidacao(IRPFException e) {
